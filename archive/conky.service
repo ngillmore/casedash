@@ -1,0 +1,39 @@
+[Unit]
+Description=Conky system monitor (Wayland client, HYTE case screen)
+# Start once the graphical session exists. WantedBy (below) already adds the
+# implicit After=graphical-session.target. Do NOT add PartOf= here: it pulls the
+# unit down with the target and previously created a start-job ordering cycle.
+After=graphical-session.target
+
+[Service]
+Type=forking
+# Conky renders via the Wayland client path (output_backend='wayland' in
+# conky.conf). This was switched from X11 because KWin 6.7.5 / Xwayland 24.1.13
+# stopped compositing X11 content to the secondary output -- native Wayland
+# surfaces reach the case screen, X11 windows never do.
+#
+# DO NOT hardcode WAYLAND_DISPLAY. The compositor socket is NOT always
+# wayland-0: it is wayland-1 whenever something (e.g. a leftover process from
+# the previous boot) already held wayland-0 at session start. A hardcoded
+# Environment=WAYLAND_DISPLAY=wayland-0 then overrides the correct systemd
+# session value, conky fails wl_display_connect with ENOENT, and -- critically --
+# it does NOT crash: it silently falls back to console output. The unit reports
+# "active (running)" while the case screen stays pure black, and the journal
+# shows a fully populated text dump that makes it look healthy.
+#
+# conky-wayland-env.sh resolves whichever wayland-N socket really exists this
+# boot and execs conky with it, so a socket rename can never blank the panel again.
+ExecStart=/bin/bash %h/.local/bin/conky-wayland-env.sh %h/.config/conky/conky.conf
+# No -m 1: xinerama head selection is an X11 concept and is meaningless for the
+# Wayland output path. Output placement comes from conky.conf (gap_x/gap_y).
+# No ExecStartPost position fixer: fix_conky_position.py repositions the X11
+# override-redirect window, which does not exist under the Wayland path; it
+# would retry until it timed out and hold the unit in "activating (start-post)".
+# conky treats SIGHUP as "terminate", not "reload", so a plain kill -HUP leaves
+# the service dead and the screen blank. Restart the unit instead.
+ExecReload=/bin/systemctl --user restart conky.service
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

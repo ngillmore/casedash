@@ -1,0 +1,32 @@
+[Unit]
+Description=Case-screen dashboard renderer (Qt6/QML, pinned to DP-1)
+Documentation=file:///home/yak/projects/casedash/README.md
+After=graphical-session.target casedash-collector.service
+Wants=casedash-collector.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+
+# WAYLAND_DISPLAY is deliberately NOT hardcoded. That is the exact bug that made
+# Conky report "active (running)" while the panel was pure black: the unit pinned
+# wayland-0, this boot created wayland-1, and Conky silently fell back to console
+# output. The resolver picks whichever socket actually exists.
+ExecStart=/home/yak/.local/bin/casedash-wayland-env.sh
+
+Environment=QT_QPA_PLATFORM=wayland
+# THE critical setting: without it Qt uses its default xdg-shell integration,
+# LayerShellQt refuses to attach ("already has a shell integration"), and the
+# panel lands on the primary monitor instead of the case screen.
+Environment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell
+Environment=QSG_RENDER_LOOP=threaded
+Restart=always
+RestartSec=3
+# Never compete with a game for CPU or GPU.
+Nice=10
+CPUWeight=15
+IOWeight=15
+MemoryMax=512M
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,28 @@
+[Unit]
+Description=Case-screen telemetry collector (writes one JSON state blob)
+Documentation=file:///home/yak/projects/casedash/README.md
+After=graphical-session.target
+
+[Service]
+Type=simple
+# The collector needs no display at all -- it only reads /proc, /sys, nvidia-smi,
+# apcaccess, fastfetch and wttr.in. That is the whole point of splitting it from
+# the renderer: no graphical dependency, so no update can strand it.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/yak/projects/casedash/collector/casedash_collector.py
+Restart=always
+RestartSec=3
+# If it wedges (a hung probe), kill and restart rather than silently freezing
+# the panel on stale numbers.
+WatchdogSec=0
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+# Keep it off the game's cores and away from the GPU entirely.
+CPUWeight=20
+IOWeight=20
+MemoryMax=256M
+
+[Install]
+WantedBy=default.target

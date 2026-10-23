@@ -1,0 +1,7 @@
+[Unit]
+Description=Audit the conky version pin (updates keep erasing it)
+After=arch-update.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash %h/.local/bin/conky-pin-audit.sh

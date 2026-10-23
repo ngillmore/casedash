@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodically verify the case-screen dashboard pixels and geometry
+
+[Timer]
+# Every 15 minutes. Cheap (one KWin probe + two stat calls), but frequent enough
+# to catch a silent failure the same session rather than days later.
+OnBootSec=3min
+OnStartupSec=2min
+OnUnitActiveSec=15min
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

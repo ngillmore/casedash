@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily conky version-pin audit
+
+[Timer]
+# Run an hour after arch-update.timer (10:20) so a broken conky is flagged the
+# same day the update that broke it landed.
+OnCalendar=*-*-* 11:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

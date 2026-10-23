@@ -1,0 +1,17 @@
+# build artifacts
+renderer/build/
+renderer/qml/Theme.qml
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# editor / os
+*.swp
+*~
+.DS_Store
+
+# local state
+*.log
