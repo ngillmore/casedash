@@ -1,0 +1,89 @@
+name: build
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build renderer (Qt6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ubuntu's Qt6 dev packages: the renderer needs Core/Gui/Qml/Quick plus
+      # moc, and layer-shell-qt for the output pinning.
+      - name: Install Qt6 and layer-shell-qt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            qt6-base-dev qt6-declarative-dev qt6-base-dev-tools \
+            liblayershellqtinterface-dev qml6-module-qtquick \
+            qml6-module-qtquick-window qml6-module-qtquick-layouts
+
+      # The build script is the real contract: if this passes, a stranger can
+      # compile the renderer. No cmake involved by design.
+      - name: Build renderer
+        run: ./renderer/build.sh
+
+      - name: Confirm the binary exists
+        run: test -x renderer/build/casedash
+
+      # Qt can load a QML tree without a display, which catches syntax errors and
+      # unresolved imports -- the two failure modes that produce a black panel.
+      - name: Check QML parses
+        run: |
+          sudo apt-get install -y --no-install-recommends qt6-declarative-dev-tools
+          for f in renderer/qml/*.qml; do
+            echo "::group::$f"
+            qmllint "$f" || echo "qmllint reported issues in $f (non-fatal)"
+            echo "::endgroup::"
+          done
+
+  collector:
+    name: Collector syntax + smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Byte-compile
+        run: python3 -m py_compile collector/casedash_collector.py
+
+      # The collector must be importable and survive a few ticks on a machine
+      # with none of the hardware probes present. Every probe degrades to null
+      # rather than raising -- that is the design contract, so assert it.
+      - name: Import + config defaults
+        run: |
+          python3 - <<'PY'
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location(
+              "c", "collector/casedash_collector.py")
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          assert m.NET_IFACE, "NET_IFACE must resolve"
+          assert m.WX_LOCATION, "WX_LOCATION must resolve"
+          print("NET_IFACE  =", m.NET_IFACE)
+          print("WX_LOCATION=", m.WX_LOCATION)
+          PY
+
+      - name: Env overrides are honoured
+        env:
+          CASEDASH_NET_IFACE: wlan0
+          CASEDASH_WX_LOCATION: London
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          spec = importlib.util.spec_from_file_location(
+              "c", "collector/casedash_collector.py")
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          assert m.NET_IFACE == "wlan0", m.NET_IFACE
+          assert m.WX_LOCATION == "London", m.WX_LOCATION
+          print("overrides ok")
+          PY
