@@ -1,12 +1,12 @@
 [Unit]
 Description=Verify the case-screen dashboard is actually rendering (not just "active")
-Documentation=file:///home/yak/projects/casedash/README.md
+Documentation=file://%h/projects/casedash/README.md
 
 [Service]
 Type=oneshot
 # The whole point of this project is that a unit can report active (running)
 # with a fully populated journal while the panel shows nothing. This check
 # asserts pixels and geometry instead of service state.
-ExecStart=/home/yak/projects/casedash/verify.sh
+ExecStart=%h/projects/casedash/verify.sh
 # Do not let a failed check take down anything else; it is a reporter.
 SuccessExitStatus=0

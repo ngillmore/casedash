@@ -26,11 +26,21 @@ from pathlib import Path
 
 RUNTIME_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")) / "casedash"
 STATE_FILE = RUNTIME_DIR / "state.json"
-THEME_FILE = Path.home() / "projects/casedash/renderer/qml/Theme.qml"
+# Where the renderer's generated Theme.qml lives. Only the theme bridge writes
+# here, so a wrong value costs you live recolouring, not telemetry.
+THEME_FILE = Path(
+    os.environ.get("CASEDASH_THEME", Path.home() / "projects/casedash/renderer/qml/Theme.qml")
+)
 
 TICK = 1.0                 # internal sampling cadence (history accuracy)
 PUBLISH_EVERY = 3.0        # how often state.json is actually rewritten
-NET_IFACE = "enp77s0"
+# Network interface to graph. There is no portable way to guess the "main" one
+# (Wi-Fi, a bridge, a VPN tunnel are all plausible), so this is explicit and
+# overridable. Find yours with: ip route get 1.1.1.1
+NET_IFACE = os.environ.get("CASEDASH_NET_IFACE", "enp77s0")
+# wttr.in location slug. "auto" lets wttr.in geolocate from your public IP,
+# which is the right default for a stranger cloning this repo.
+WX_LOCATION = os.environ.get("CASEDASH_WX_LOCATION", "auto")
 HISTORY_LEN = 160          # samples kept for the sparkline charts (~8 min at 3s)
 
 # The panel is a glanceable status display, not a monitor. Quantising the
@@ -389,7 +399,7 @@ class WeatherProbe:
             return self.cache
         try:
             req = urllib.request.Request(
-                "https://wttr.in/Little_Rock?format=j1",
+                f"https://wttr.in/{WX_LOCATION}?format=j1",
                 headers={"User-Agent": "curl/8"},
             )
             with urllib.request.urlopen(req, timeout=10) as r:

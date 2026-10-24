@@ -1,6 +1,6 @@
 [Unit]
 Description=Case-screen dashboard renderer (Qt6/QML, pinned to DP-1)
-Documentation=file:///home/yak/projects/casedash/README.md
+Documentation=file://%h/projects/casedash/README.md
 After=graphical-session.target casedash-collector.service
 Wants=casedash-collector.service
 PartOf=graphical-session.target
@@ -12,7 +12,7 @@ Type=simple
 # Conky report "active (running)" while the panel was pure black: the unit pinned
 # wayland-0, this boot created wayland-1, and Conky silently fell back to console
 # output. The resolver picks whichever socket actually exists.
-ExecStart=/home/yak/.local/bin/casedash-wayland-env.sh
+ExecStart=%h/.local/bin/casedash-wayland-env.sh
 
 Environment=QT_QPA_PLATFORM=wayland
 # THE critical setting: without it Qt uses its default xdg-shell integration,

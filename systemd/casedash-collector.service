@@ -1,6 +1,6 @@
 [Unit]
 Description=Case-screen telemetry collector (writes one JSON state blob)
-Documentation=file:///home/yak/projects/casedash/README.md
+Documentation=file://%h/projects/casedash/README.md
 After=graphical-session.target
 
 [Service]
@@ -10,7 +10,13 @@ Type=simple
 # the renderer: no graphical dependency, so no update can strand it.
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 /home/yak/projects/casedash/collector/casedash_collector.py
+# --- configuration (see the README's Configuration table) ---
+# Interface to graph. Find yours with: ip route get 1.1.1.1
+Environment=CASEDASH_NET_IFACE=enp77s0
+# wttr.in location slug; "auto" geolocates from your public IP.
+Environment=CASEDASH_WX_LOCATION=auto
+# %h expands to the invoking user's home, so this unit is not tied to one account.
+ExecStart=/usr/bin/python3 %h/projects/casedash/collector/casedash_collector.py
 Restart=always
 RestartSec=3
 # If it wedges (a hung probe), kill and restart rather than silently freezing
