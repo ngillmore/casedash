@@ -8,7 +8,7 @@ Item {
     property real value: 0.0            // 0.0 .. 1.0
     property color fillColor: (Backend.theme.accent || "#C86414")
     property color trackColor: (Backend.theme.accentSoft || "#2a2a2a")
-    property real barHeight: 10
+    property real barHeight: Ui.barH
     property real radius: barHeight / 2
     property real warnAt: 0.85
     property real alertAt: 0.94

@@ -266,6 +266,14 @@ int main(int argc, char *argv[])
     }
     backend.watchFile(&watcher);
     engine.rootContext()->setContextProperty("Backend", &backend);
+
+    // NOTE: layout/type metrics live in the QML singleton `Ui` (see qmldir +
+    // Ui.qml), NOT in a context property. A context property is not visible
+    // inside imported component files -- Card.qml/KeyValue.qml could not see it
+    // and every binding silently evaluated to undefined. The singleton is the
+    // only form that works across file boundaries without build machinery.
+    // Edit Ui.qml's `scale` to resize the whole panel.
+
     // Let QML construct plain QObjects (Date formatting helpers etc.)
     engine.rootContext()->setContextProperty("appDir",
         QFileInfo(args.first()).absolutePath());

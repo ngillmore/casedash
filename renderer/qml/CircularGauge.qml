@@ -18,7 +18,6 @@ Item {
     property color track: (Backend.theme.accentSoft || "#2a2a2a")
     property color textColor: (Backend.theme.foreground || "#e8e8e8")
     property color labelColor: (Backend.theme.muted || "#8a8a8a")
-    property real thickness: 16
     property real startAngle: Math.PI * 0.75
     property real sweep: Math.PI * 1.5
     // Warning thresholds: the arc recolours rather than adding more chrome.
@@ -30,8 +29,11 @@ Item {
     property real _v: Math.max(0.0, Math.min(1.0, isFinite(value) ? value : 0.0))
     property color _arc: _v >= alertAt ? alertColor : (_v >= warnAt ? warnColor : accent)
 
-    width: 190
-    height: 190
+    // Arc thickness scales with the gauge so the ring does not turn into a hairline.
+    property real thickness: Ui.s(16)
+
+    width: Ui.gaugeSize
+    height: Ui.gaugeSize
 
     Canvas {
         id: canvas

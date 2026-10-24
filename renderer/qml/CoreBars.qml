@@ -13,8 +13,8 @@ Item {
     property real warnAt: 0.80
     property color warnColor: "#e8b04b"
 
-    implicitHeight: 66
-    property real labelH: 14
+    implicitHeight: Ui.s(66)
+    property real labelH: Ui.coreBarLabelH
 
     Row {
         id: row
@@ -33,7 +33,7 @@ Item {
                     id: trackRect
                     anchors.top: parent.top
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: Math.max(4, parent.width * 0.62)
+                    width: Math.max(Ui.coreBarMinW, parent.width * 0.62)
                     height: parent.height - bars.labelH - 3
                     radius: width / 2
                     color: bars.track
@@ -66,7 +66,7 @@ Item {
                     }
                     color: bars.textColor
                     font.family: "Noto Sans"
-                    font.pixelSize: 11
+                    font.pixelSize: Ui.s(11)
                 }
             }
         }

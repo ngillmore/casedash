@@ -118,40 +118,40 @@ Window {
     // scaling trick here: width is fixed and equal to the design width, so the
     // sections are simply authored tall enough to fill the full height. Sizes
     // below are tuned against a real 3840px capture, not guessed.
-    readonly property real margin: 30
+    readonly property real margin: Ui.margin
 
     ColumnLayout {
         id: col
         anchors.fill: parent
         anchors.margins: win.margin
-        spacing: 18
+        spacing: Ui.colSpacing
 
             // ============================================ clock + date + weather
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 300
+                Layout.preferredHeight: Ui.s(300)
 
                 Column {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
-                    spacing: -6
+                    spacing: Ui.s(-6)
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: Backend.clock
                         color: (Backend.theme.accent || "#C86414")
                         font.family: "Noto Sans"
-                        font.pixelSize: 118
+                        font.pixelSize: Ui.fsClock
                         font.bold: true
-                        font.letterSpacing: -3
+                        font.letterSpacing: Ui.s(-3)
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: Backend.datestr
                         color: (Backend.theme.foreground || "#e8e8e8")
                         font.family: "Noto Sans"
-                        font.pixelSize: 30
-                        font.letterSpacing: 1
+                        font.pixelSize: Ui.fsDate
+                        font.letterSpacing: Ui.s(1)
                     }
                 }
 
@@ -159,20 +159,20 @@ Window {
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
-                    spacing: 10
+                    spacing: Ui.s(10)
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: win.wxGlyph(win.wx.code)
                         color: (Backend.theme.accent || "#C86414")
-                        font.pixelSize: 40
+                        font.pixelSize: Ui.fsWxGlyph
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: win.wx.temp_f !== undefined ? win.wx.temp_f + "°F" : "--"
                         color: (Backend.theme.foreground || "#e8e8e8")
                         font.family: "Noto Sans"
-                        font.pixelSize: 38
+                        font.pixelSize: Ui.fsWxTemp
                         font.bold: true
                     }
                     Text {
@@ -180,7 +180,7 @@ Window {
                         text: (win.wx.desc || "") + (win.wx.area ? "  ·  " + win.wx.area : "")
                         color: (Backend.theme.muted || "#8a8a8a")
                         font.family: "Noto Sans"
-                        font.pixelSize: 22
+                        font.pixelSize: Ui.fsWxDesc
                     }
                 }
             }
@@ -188,13 +188,13 @@ Window {
             // ================================================== CPU + GPU gauges
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 300
-                spacing: 8
+                Layout.preferredHeight: Ui.s(300)
+                spacing: Ui.s(8)
 
                 CircularGauge {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 186
-                    Layout.preferredHeight: 186
+                    Layout.preferredWidth: Ui.gaugeSize
+                    Layout.preferredHeight: Ui.gaugeSize
                     label: "CPU LOAD"
                     value: (win.cpu.load || 0) / 100
                     unit: "%"
@@ -205,8 +205,8 @@ Window {
 
                 CircularGauge {
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 186
-                    Layout.preferredHeight: 186
+                    Layout.preferredWidth: Ui.gaugeSize
+                    Layout.preferredHeight: Ui.gaugeSize
                     label: "GPU LOAD"
                     value: (win.gpu.util || 0) / 100
                     unit: "%"
@@ -218,18 +218,16 @@ Window {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
-                    spacing: 9
+                    spacing: Ui.s(9)
 
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 90
+                        labelWidth: Ui.s(72)
                         label: "VRAM"
                         value: win.gpu.vram_used !== undefined
                                ? (win.gpu.vram_used + " / " + win.gpu.vram_total + " MB") : "--"
                         trailing: win.pct(win.gpu.vram_pct, 0)
                         valueColor: (Backend.theme.foreground || "#e8e8e8")
-                        labelSize: 14
-                        valueSize: 14
                     }
                     ProgressBar {
                         Layout.fillWidth: true
@@ -237,12 +235,10 @@ Window {
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 90
+                        labelWidth: Ui.s(90)
                         label: "RAM"
                         value: win.mb(win.ram.used_mb) + " / " + win.mb(win.ram.total_mb)
                         trailing: win.pct(win.ram.pct, 0)
-                        labelSize: 14
-                        valueSize: 14
                     }
                     ProgressBar {
                         Layout.fillWidth: true
@@ -250,13 +246,11 @@ Window {
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 90
+                        labelWidth: Ui.s(90)
                         label: "POWER"
                         value: win.gpu.power !== undefined ? win.num(win.gpu.power, 0) + " W" : "--"
                         trailing: win.gpu.power_limit !== undefined
                                   ? "of " + win.num(win.gpu.power_limit, 0) + "W" : ""
-                        labelSize: 14
-                        valueSize: 14
                     }
                     ProgressBar {
                         Layout.fillWidth: true
@@ -269,22 +263,22 @@ Window {
             Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: 300
+                Layout.preferredHeight: Ui.s(300)
                 title: win.cpu.model || "CPU"
                 rightLabel: win.pct(win.cpu.load, 1)
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 6
+                    spacing: Ui.s(6)
 
                     CoreBars {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 150
+                        Layout.preferredHeight: Ui.s(150)
                         values: win.cpu.cores || []
                     }
                     Sparkline {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 90
+                        Layout.preferredHeight: Ui.s(90)
                         samples: win.hist.cpu || []
                         floorMax: 100
                         ceiling: 100
@@ -297,7 +291,7 @@ Window {
             Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: 260
+                Layout.preferredHeight: Ui.s(260)
                 title: "GPU UTILISATION  ·  " + (win.sys.gpu_model || "RTX 4090")
                 rightLabel: win.pct(win.gpu.util, 0)
 
@@ -313,12 +307,12 @@ Window {
             Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: 340
+                Layout.preferredHeight: Ui.s(340)
                 title: "NETWORK  ·  " + (win.net.iface || "")
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 8
+                    spacing: Ui.s(8)
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -327,22 +321,18 @@ Window {
                             label: "▼ DOWN"
                             value: win.bytes(win.net.rx_rate)
                             valueColor: (Backend.theme.accent || "#C86414")
-                            labelSize: 15
-                            valueSize: 17
                         }
                         KeyValue {
                             Layout.fillWidth: true
                             label: "▲ UP"
                             value: win.bytes(win.net.tx_rate)
                             valueColor: (Backend.theme.secondary || "#C86414")
-                            labelSize: 15
-                            valueSize: 17
                         }
                     }
 
                     Sparkline {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 140
+                        Layout.preferredHeight: Ui.s(140)
                         samples: win.hist.net_down || []
                         floorMax: 131072          // 128 KB/s floor so idle is not a flat line
                         line: (Backend.theme.accent || "#C86414")
@@ -355,15 +345,11 @@ Window {
                             Layout.fillWidth: true
                             label: "▼ TOTAL"
                             value: win.sizeB(win.net.rx_total)
-                            labelSize: 14
-                            valueSize: 14
                         }
                         KeyValue {
                             Layout.fillWidth: true
                             label: "▲ TOTAL"
                             value: win.sizeB(win.net.tx_total)
-                            labelSize: 14
-                            valueSize: 14
                         }
                     }
                 }
@@ -372,49 +358,43 @@ Window {
             // ============================================================ UPS
             Card {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 300
+                Layout.preferredHeight: Ui.s(300)
                 title: "UPS  ·  " + (win.ups.status || "--")
                 accent: (win.ups.status || "").indexOf("ONBATT") >= 0 ? (Backend.theme.warn || "#ff6b6b") : (Backend.theme.ok || "#7dd87d")
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 6
+                    spacing: Ui.s(6)
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 10
+                        spacing: Ui.s(10)
 
                         KeyValue {
                             Layout.fillWidth: true
-                            labelWidth: 96
+                            labelWidth: Ui.s(96)
                             label: "LINE"
                             value: win.num(win.ups.linev, 1)
                             unit: "V"
-                            labelSize: 15
-                            valueSize: 16
                         }
                         KeyValue {
                             Layout.fillWidth: true
-                            labelWidth: 96
+                            labelWidth: Ui.s(96)
                             label: "LOAD"
                             value: win.ups.watts !== undefined ? String(win.ups.watts) : "--"
                             unit: "W"
                             trailing: win.pct(win.ups.load_pct, 0)
-                            labelSize: 15
-                            valueSize: 16
                         }
                     }
 
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 120
+                        labelWidth: Ui.s(120)
                         label: "CHARGE"
                         value: win.pct(win.ups.charge, 0)
                         trailing: win.ups.runtime !== undefined
                                   ? win.num(win.ups.runtime, 1) + " min left" : ""
                         valueColor: (win.ups.charge || 0) < 50 ? (Backend.theme.warn || "#ff6b6b") : (Backend.theme.ok || "#7dd87d")
-                        labelSize: 15
-                        valueSize: 16
                     }
                     ProgressBar {
                         Layout.fillWidth: true
@@ -426,7 +406,7 @@ Window {
                     ProgressBar {
                         Layout.fillWidth: true
                         value: (win.ups.load_pct || 0) / 100
-                        barHeight: 6
+                        barHeight: Ui.barHThin
                     }
                 }
             }
@@ -434,7 +414,7 @@ Window {
             // ====================================================== disk usage
             Card {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 50 + 84 * Math.max(1, win.disks.length)
+                Layout.preferredHeight: Ui.s(50) + Ui.s(84) * Math.max(1, win.disks.length)
                 title: "STORAGE"
                 // Show both directions; the old label was just the write rate
                 // with no indication of what it was.
@@ -443,14 +423,14 @@ Window {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 7
+                    spacing: Ui.s(7)
 
                     Repeater {
                         model: win.disks
 
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 3
+                            spacing: Ui.s(3)
 
                             KeyValue {
                                 Layout.fillWidth: true
@@ -458,13 +438,11 @@ Window {
                                 value: modelData.used_gb + " / " + modelData.total_gb + " GB"
                                 trailing: modelData.pct + "%"
                                 valueColor: win.heatColor(modelData.pct)
-                                labelSize: 14
-                                valueSize: 14
                             }
                             ProgressBar {
                                 Layout.fillWidth: true
                                 value: modelData.pct / 100
-                                barHeight: 6
+                                barHeight: Ui.barHThin
                             }
                         }
                     }
@@ -474,103 +452,85 @@ Window {
             // ==================================================== system info
             Card {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 30 + 46 * 10
+                // Row pitch must track the scaled line height, or the last rows
+                // run past the card and get clipped.
+                Layout.preferredHeight: Ui.s(30) + (Ui.fsValue + Ui.s(18)) * 10
                 title: "SYSTEM"
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 2
+                    spacing: Ui.s(2)
 
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "OS"
                         value: (win.sys.os || "--") + "  ·  " + (win.st.kernel || win.sys.kernel || "")
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "HOST"
                         value: win.sys.host || "--"
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "UPTIME"
                         value: win.uptime(win.st.uptime_s)
                         trailing: "load " + win.num((win.cpu.load_avg || [0])[0], 2)
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "SHELL"
                         value: win.sys.shell || "--"
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "DESKTOP"
                         value: (win.sys.de || "") + " / " + (win.sys.wm || "")
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "PACKAGES"
                         value: win.sys.packages !== undefined ? String(win.sys.packages) : "--"
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "SWAP"
                         value: win.mb(win.swap.used_mb) + " / " + win.mb(win.swap.total_mb)
                         trailing: win.pct(win.swap.pct, 0)
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "LOCAL IP"
                         value: win.net.ip || "--"
-                        labelSize: 14
-                        valueSize: 14
                         mono: true
                     }
                     // Displays: stacked, because there are two of them.
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: "DISPLAYS"
                         value: (win.sys.displays || []).length > 0
                                ? (win.sys.displays[0] || "").replace(" (primary)", "") : "--"
-                        labelSize: 14
-                        valueSize: 14
                     }
                     KeyValue {
                         Layout.fillWidth: true
-                        labelWidth: 150
+                        labelWidth: Ui.s(150)
                         label: ""
                         value: (win.sys.displays || []).length > 1
                                ? (win.sys.displays[1] || "").replace(" (primary)", "") : ""
-                        labelSize: 14
-                        valueSize: 14
                     }
                 }
             }
 
-            Item { Layout.fillWidth: true; Layout.preferredHeight: 20 }
+            Item { Layout.fillWidth: true; Layout.preferredHeight: Ui.s(20) }
     }
 
     // ------------------------------------------------------------ stale banner
@@ -581,10 +541,10 @@ Window {
         visible: win.stale
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.margins: 12
-        width: staleText.implicitWidth + 24
-        height: 30
-        radius: 6
+        anchors.margins: Ui.s(12)
+        width: staleText.implicitWidth + Ui.s(24)
+        height: Ui.s(30)
+        radius: Ui.s(6)
         color: (Backend.theme.warn || "#ff6b6b")
         opacity: 0.92
 
@@ -594,7 +554,7 @@ Window {
             text: "⚠  " + (Backend.status || "collector down")
             color: (Backend.theme.background || "#0a0a0a")
             font.family: "Noto Sans"
-            font.pixelSize: 14
+            font.pixelSize: Ui.fsStale
             font.bold: true
         }
     }

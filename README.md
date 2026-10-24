@@ -42,12 +42,44 @@ Everything is polled from local sources (`/proc`, `/sys`, `nvidia-smi`,
     collector/casedash_collector.py   telemetry daemon -> state.json
     renderer/src/host.cpp             Qt6 C++ QML host + LayerShellQt pinning
     renderer/qml/                     QML UI (Theme.qml is generated)
+    renderer/qml/Ui.qml               layout + type metrics (the `scale` knob)
     renderer/build.sh                 compile script (plain g++, no cmake)
     systemd/                          user units
     verify.sh                         pixel/geometry verification
     theme/casedash-theme.py           matugen template driver + RGB sync
     theme/matugen-hook.py             matugen post-hook entry point
     archive/                          archived Conky setup (fallback reference)
+
+## Resizing the panel text
+
+Every font size, padding value and row pitch derives from one number: `scale` in
+`renderer/qml/Ui.qml`. Change it, restart the renderer, done — nothing else needs
+editing.
+
+```bash
+# edit renderer/qml/Ui.qml -> readonly property real scale: 1.55
+systemctl --user restart casedash.service
+```
+
+Why a scale factor rather than bigger literals: the panel is 1100x3840 and every
+size was hand-tuned against a real capture. Scaling from one number keeps those
+tuned *proportions* intact, so the design looks the same, only larger.
+
+Two notes when changing it:
+
+- **`Ui.qml` is a QML singleton, not a context property.** A context property is
+  not visible inside imported component files — `Card.qml`/`KeyValue.qml` cannot
+  see it, and every binding silently evaluates to `undefined` instead of erroring
+  usefully. The singleton (declared in `qmldir`) is the only form that crosses
+  file boundaries without build machinery.
+- **Gauges use a separate, gentler `gaugeScale`.** Two gauges plus the
+  VRAM/RAM/POWER value stack must fit inside 1100px; at the full text scale the
+  gauges starved the value column until `10726 / 24564 MB` elided. The gauges were
+  never the readability problem, so they grow less and give the width back to text.
+
+Practical ceiling is about `scale: 1.7`. The two `Layout.fillHeight` cards (CPU
+core, GPU util) absorb the slack; past that, the STORAGE and SYSTEM value columns
+start eliding.
 
 ## Install
 
