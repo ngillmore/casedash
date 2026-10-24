@@ -55,10 +55,18 @@ Every value is polled from a local source (`/proc`, `/sys`, `nvidia-smi`,
 
 ## Requirements
 
-- **Qt 6** — Core, Gui, Qml, Quick, plus `moc`
+- **Qt 6** — Core, Gui, Qml, Quick, plus the **Qt6 `moc`**
+  (Debian/Ubuntu: `qt6-base-dev-tools`; Arch: `qt6-base`)
 - **layer-shell-qt** (the `LayerShellQtInterface` lib and headers)
 - **Python 3** — standard library only, no pip installs
 - Optional, for the full panel: `nvidia-smi`, `apcaccess` (apcupsd), `fastfetch`
+
+> **Watch the moc version.** A Qt5 `moc` generating for Qt6 headers fails with a
+> wall of misleading errors (`#error This file was generated using the moc from
+> 5.15.x`, then spurious *"class has no member named `setScreen`"*). On Arch
+> `/usr/bin/moc` is Qt6; on Debian/Ubuntu it is **Qt5's**. `build.sh` now probes
+> candidates and verifies each one reports `moc 6.x`, but the build will refuse
+> to run rather than produce that confusing failure.
 
 ## Install
 

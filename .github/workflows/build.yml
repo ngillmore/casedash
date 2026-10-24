@@ -15,14 +15,22 @@ jobs:
 
       # Ubuntu's Qt6 dev packages: the renderer needs Core/Gui/Qml/Quick plus
       # moc, and layer-shell-qt for the output pinning.
+      # NOTE: qt6-base-dev-tools is what provides the Qt6 moc. Without it the
+      # build picks up Qt5's /usr/bin/moc and fails with misleading errors.
       - name: Install Qt6 and layer-shell-qt
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config \
-            qt6-base-dev qt6-declarative-dev qt6-base-dev-tools \
-            liblayershellqtinterface-dev qml6-module-qtquick \
-            qml6-module-qtquick-window qml6-module-qtquick-layouts
+            qt6-base-dev qt6-base-dev-tools qt6-declarative-dev \
+            liblayershellqtinterface-dev \
+            qml6-module-qtquick qml6-module-qtquick-window \
+            qml6-module-qtquick-layouts qt6-declarative-dev-tools
+
+      - name: Show which moc we get
+        run: |
+          which -a moc moc6 || true
+          moc --version || true
 
       # The build script is the real contract: if this passes, a stranger can
       # compile the renderer. No cmake involved by design.
@@ -36,7 +44,6 @@ jobs:
       # unresolved imports -- the two failure modes that produce a black panel.
       - name: Check QML parses
         run: |
-          sudo apt-get install -y --no-install-recommends qt6-declarative-dev-tools
           for f in renderer/qml/*.qml; do
             echo "::group::$f"
             qmllint "$f" || echo "qmllint reported issues in $f (non-fatal)"
