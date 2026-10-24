@@ -37,6 +37,26 @@ if [ -z "$LS_LIBS" ]; then
     fi
 fi
 
+# layer-shell-qt changed its output-pinning API: `Window::setScreen()` and
+# `setActivateOnShow()` only exist from 6.7 onward. Ubuntu 24.04 ships 6.0, where
+# `setScreen()` does not compile at all (and neither does a version macro exist to
+# test against). So feature-test by actually COMPILING a probe, rather than
+# guessing from a version string or distro.
+#
+# Doing it wrong is expensive to diagnose: on an older lib you get a bare
+# "'LayerShellQt::Window' has no member named 'setScreen'", which reads like a
+# typo rather than a version gap.
+echo ":: probe  LayerShellQt::Window::setScreen"
+if printf '#include <LayerShellQt/Window>\nint main(){ auto *w = (LayerShellQt::Window*)nullptr; w->setScreen(nullptr); }\n' \
+   | g++ -std=c++17 -fsyntax-only -x c++ - $LS_CFLAGS $(pkg-config --cflags Qt6Gui 2>/dev/null) - 2>/dev/null
+then
+    LS_DEFS="-DCASEDASH_LAYERSHELL_HAS_SETSCREEN=1"
+    echo "::        present -- using setScreen()"
+else
+    LS_DEFS=""
+    echo "::        absent  -- falling back to setScreenConfiguration()"
+fi
+
 # Qt6 moc is needed for the Q_OBJECT in host.cpp.
 #
 # Getting the RIGHT moc matters more than it looks. A Qt5 moc generating the .moc
@@ -84,7 +104,7 @@ echo ":: moc   $MOC ($("$MOC" --version 2>/dev/null | head -1))"
 echo ":: g++   compiling"
 g++ -std=c++17 -O2 -fPIC \
     -I"$BUILD" -I"$HERE/src" \
-    $QT_INC $LS_CFLAGS \
+    $QT_INC $LS_CFLAGS $LS_DEFS \
     -o "$BUILD/casedash" "$HERE/src/host.cpp" \
     $QT_LIB $LS_LIBS
 

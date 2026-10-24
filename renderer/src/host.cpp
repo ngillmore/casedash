@@ -312,9 +312,34 @@ int main(int argc, char *argv[])
         bool matched = false;
         for (QScreen *s : QGuiApplication::screens()) {
             if (s->name() == target) {
-                ls->setScreen(s);       // the ONLY way to pin output on Wayland
+                // The ONLY way to pin output on Wayland.
+                //
+                // API split: `setScreen()` arrived in layer-shell-qt 6.7. Older
+                // releases (Ubuntu 24.04 ships 6.0) only have the
+                // `setScreenConfiguration(ScreenFromQWindow)` shim it replaced,
+                // which reads QWindow::screen() at attach time. There is no
+                // version macro in the headers to test against, so build.sh
+                // feature-tests by compiling a probe and defines this for us.
+#ifdef CASEDASH_LAYERSHELL_HAS_SETSCREEN
+                ls->setScreen(s);
+                const char *how = "setScreen()";
+#else
+                // Set the QWindow's screen too: the old shim reads it, and
+                // QWindow::setScreen() is harmless here because the layer
+                // surface has not been created yet.
+                win->setScreen(s);
+                // Deprecated as of 6.6 (the replacement is setScreen()), but it
+                // is the ONLY option before 6.7 -- so the warning is expected
+                // here, not a sign of a mistake.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+                ls->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
+#pragma GCC diagnostic pop
+                const char *how = "setScreenConfiguration() shim";
+#endif
                 matched = true;
-                qInfo() << "casedash: pinned to" << s->name() << s->geometry();
+                qInfo() << "casedash: pinned to" << s->name() << s->geometry()
+                        << "via" << how;
                 break;
             }
         }
@@ -335,7 +360,12 @@ int main(int argc, char *argv[])
         ls->setScope(QStringLiteral("casedash"));
         // -1 == do not reserve exclusive space; we want to sit UNDER windows.
         ls->setExclusiveZone(-1);
-        ls->setActivateOnShow(false);   // never steal focus from a game
+        // Never steal focus from a game. Absent in layer-shell-qt < 6.7; the
+        // default there is already false-ish for our layer+interactivity
+        // combination, so skipping it is safe rather than merely tolerable.
+#ifdef CASEDASH_LAYERSHELL_HAS_SETSCREEN
+        ls->setActivateOnShow(false);
+#endif
     } else {
         qWarning() << "casedash: LayerShellQt unavailable, running as a normal window";
     }
