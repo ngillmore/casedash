@@ -9,12 +9,17 @@ on:
 jobs:
   build:
     name: Build renderer (Qt6)
-    runs-on: ubuntu-latest
+    # NOT ubuntu-latest. That resolves to 24.04, whose layer-shell-qt is
+    # 5.27.11 -- a Plasma 5 / Qt5 build. There is no Qt6 layer-shell-qt package
+    # in noble at all, so the renderer cannot link there no matter what we do.
+    # Qt6 builds only exist from 25.04 onward (6.3.4), and setScreen() needs
+    # 6.7+ (26.04). 24.04 is still covered by the collector job below.
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
-      # Ubuntu's Qt6 dev packages: the renderer needs Core/Gui/Qml/Quick plus
-      # moc, and layer-shell-qt for the output pinning.
+      # Qt6 dev packages: Core/Gui/Qml/Quick, the Qt6 moc, and layer-shell-qt
+      # for output pinning.
       # NOTE: qt6-base-dev-tools is what provides the Qt6 moc. Without it the
       # build picks up Qt5's /usr/bin/moc and fails with misleading errors.
       - name: Install Qt6 and layer-shell-qt
@@ -27,10 +32,12 @@ jobs:
             qml6-module-qtquick qml6-module-qtquick-window \
             qml6-module-qtquick-layouts qt6-declarative-dev-tools
 
-      - name: Show which moc we get
+      - name: Show which moc and layer-shell-qt we get
         run: |
           which -a moc moc6 || true
           moc --version || true
+          dpkg -l | grep -i layershell || true
+          ls /usr/include/LayerShellQt/ || true
 
       # The build script is the real contract: if this passes, a stranger can
       # compile the renderer. No cmake involved by design.

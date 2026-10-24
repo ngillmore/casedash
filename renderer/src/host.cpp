@@ -312,30 +312,32 @@ int main(int argc, char *argv[])
         bool matched = false;
         for (QScreen *s : QGuiApplication::screens()) {
             if (s->name() == target) {
-                // The ONLY way to pin output on Wayland.
-                //
-                // API split: `setScreen()` arrived in layer-shell-qt 6.7. Older
-                // releases (Ubuntu 24.04 ships 6.0) only have the
-                // `setScreenConfiguration(ScreenFromQWindow)` shim it replaced,
-                // which reads QWindow::screen() at attach time. There is no
-                // version macro in the headers to test against, so build.sh
-                // feature-tests by compiling a probe and defines this for us.
-#ifdef CASEDASH_LAYERSHELL_HAS_SETSCREEN
+                // The ONLY way to pin output on Wayland -- but the API moved
+                // twice. build.sh feature-tests the installed headers and
+                // defines exactly one of these (see its comment for the version
+                // table); there is no version macro to test against here.
+#if defined(CASEDASH_LS_SETSCREEN)
                 ls->setScreen(s);
                 const char *how = "setScreen()";
-#else
-                // Set the QWindow's screen too: the old shim reads it, and
-                // QWindow::setScreen() is harmless here because the layer
-                // surface has not been created yet.
+#elif defined(CASEDASH_LS_SCREENCONFIG)
+                // The 6.0-6.6 shim reads QWindow::screen() at attach time, so
+                // set that too. Harmless here: the layer surface does not exist
+                // yet.
                 win->setScreen(s);
-                // Deprecated as of 6.6 (the replacement is setScreen()), but it
-                // is the ONLY option before 6.7 -- so the warning is expected
-                // here, not a sign of a mistake.
+                // Deprecated as of 6.6 -- the replacement is setScreen(), which
+                // this branch exists precisely because we do not have.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
                 ls->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);
 #pragma GCC diagnostic pop
                 const char *how = "setScreenConfiguration() shim";
+#elif defined(CASEDASH_LS_DESIREDOUTPUT)
+                // Plasma 5 API: the closest match to what we actually want,
+                // since it takes the output directly.
+                ls->setDesiredOutput(s);
+                const char *how = "setDesiredOutput()";
+#else
+#error "no layer-shell-qt output-pinning API -- build.sh should have caught this"
 #endif
                 matched = true;
                 qInfo() << "casedash: pinned to" << s->name() << s->geometry()
@@ -360,10 +362,10 @@ int main(int argc, char *argv[])
         ls->setScope(QStringLiteral("casedash"));
         // -1 == do not reserve exclusive space; we want to sit UNDER windows.
         ls->setExclusiveZone(-1);
-        // Never steal focus from a game. Absent in layer-shell-qt < 6.7; the
-        // default there is already false-ish for our layer+interactivity
-        // combination, so skipping it is safe rather than merely tolerable.
-#ifdef CASEDASH_LAYERSHELL_HAS_SETSCREEN
+        // Never steal focus from a game. Independent of the pinning API above --
+        // absent before layer-shell-qt 6.7. Defaults are already harmless for
+        // our layer+interactivity combination, so skipping it is safe.
+#if defined(CASEDASH_LS_SETSCREEN)
         ls->setActivateOnShow(false);
 #endif
     } else {

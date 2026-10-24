@@ -37,24 +37,44 @@ if [ -z "$LS_LIBS" ]; then
     fi
 fi
 
-# layer-shell-qt changed its output-pinning API: `Window::setScreen()` and
-# `setActivateOnShow()` only exist from 6.7 onward. Ubuntu 24.04 ships 6.0, where
-# `setScreen()` does not compile at all (and neither does a version macro exist to
-# test against). So feature-test by actually COMPILING a probe, rather than
-# guessing from a version string or distro.
+# layer-shell-qt has shipped THREE different ways to pin a surface to an output,
+# and the headers expose no version macro (and often no .pc file) to tell them
+# apart. Guessing from a version number is not viable: Ubuntu 24.04's
+# liblayershellqtinterface-dev is 5.27.11 -- a Plasma 5 build whose API differs
+# from every Plasma 6 release.
 #
-# Doing it wrong is expensive to diagnose: on an older lib you get a bare
-# "'LayerShellQt::Window' has no member named 'setScreen'", which reads like a
-# typo rather than a version gap.
-echo ":: probe  LayerShellQt::Window::setScreen"
-if printf '#include <LayerShellQt/Window>\nint main(){ auto *w = (LayerShellQt::Window*)nullptr; w->setScreen(nullptr); }\n' \
-   | g++ -std=c++17 -fsyntax-only -x c++ - $LS_CFLAGS $(pkg-config --cflags Qt6Gui 2>/dev/null) - 2>/dev/null
-then
-    LS_DEFS="-DCASEDASH_LAYERSHELL_HAS_SETSCREEN=1"
-    echo "::        present -- using setScreen()"
+#   setScreen(QScreen*)                          >= 6.7   (current)
+#   setScreenConfiguration(ScreenFromQWindow)      6.0-6.6 (deprecated shim)
+#   setDesiredOutput(QScreen*)                     5.x      (Plasma 5)
+#
+# So: compile a probe for each, in newest-first order, and define whichever
+# applies. Doing this wrong is expensive to diagnose -- the failure is a bare
+# "'Window' has no member named 'setScreen'", which reads like a typo rather than
+# a version gap, and sends you hunting for an API bug that isn't there.
+LS_DEFS=""
+probe_ls() {   # $1 = macro name, $2 = C++ body
+    if printf '#include <LayerShellQt/Window>\nint main(){ auto *w = (LayerShellQt::Window*)nullptr; %s }\n' "$2" \
+       | g++ -std=c++17 -fsyntax-only -x c++ - $LS_CFLAGS \
+             $(pkg-config --cflags Qt6Gui 2>/dev/null) - 2>/dev/null
+    then
+        LS_DEFS="-D$1=1"
+        return 0
+    fi
+    return 1
+}
+
+echo ":: probe  layer-shell-qt output-pinning API"
+if probe_ls CASEDASH_LS_SETSCREEN 'w->setScreen(nullptr);'; then
+    echo "::        setScreen()                (layer-shell-qt >= 6.7)"
+elif probe_ls CASEDASH_LS_SCREENCONFIG 'w->setScreenConfiguration(LayerShellQt::Window::ScreenFromQWindow);'; then
+    echo "::        setScreenConfiguration()   (6.0 - 6.6, deprecated)"
+elif probe_ls CASEDASH_LS_DESIREDOUTPUT 'w->setDesiredOutput(nullptr);'; then
+    echo "::        setDesiredOutput()         (Plasma 5 / 5.x)"
 else
-    LS_DEFS=""
-    echo "::        absent  -- falling back to setScreenConfiguration()"
+    echo "!! No known layer-shell-qt output-pinning API found." >&2
+    echo "   The dashboard cannot pin itself to a specific output without one," >&2
+    echo "   so it would land on whatever the compositor picks." >&2
+    exit 1
 fi
 
 # Qt6 moc is needed for the Q_OBJECT in host.cpp.
