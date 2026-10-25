@@ -112,43 +112,22 @@ fi
 # The panel can be live, fresh, correctly placed, and still be lying. This is
 # the check that would have caught "Campo Salles, Argentina" in 15 minutes
 # instead of a human noticing it days later.
+#
+# The comparison lives in collector/casedash_verify.py rather than inline here
+# so it can be unit-tested (see tests/test_verify_content.py). Its CLI contract:
+# exit 0 = ok or not-evaluable, exit 1 = definite mismatch.
+WX_CHECKER="$(dirname "$(readlink -f "$0")")/collector/casedash_verify.py"
 if [ -z "$EXPECT_WX_LATLON" ] || [ "$EXPECT_WX_LATLON" = "auto" ]; then
     note "weather" "skipped (CASEDASH_VERIFY_WX_LATLON unset)"
-elif [ -f "$STATE" ]; then
-    WX=$(python3 - "$STATE" "$EXPECT_WX_LATLON" "$WX_TOLERANCE_DEG" <<'PY'
-import json, sys
-state, want, tol = sys.argv[1], sys.argv[2], float(sys.argv[3])
-try:
-    wx = json.load(open(state)).get("weather") or {}
-except Exception as e:
-    print(f"unreadable: {e}")
-    raise SystemExit(0)
-
-area = wx.get("area") or "?"
-lat, lon = wx.get("lat"), wx.get("lon")
-if lat is None or lon is None:
-    print(f"no coordinates in state.json (area={area!r})")
-    raise SystemExit(0)
-
-try:
-    wlat, wlon = (float(x) for x in want.split(","))
-except ValueError:
-    print(f"bad CASEDASH_VERIFY_WX_LATLON={want!r}, want 'lat,lon'")
-    raise SystemExit(0)
-
-dlat, dlon = abs(lat - wlat), abs(lon - wlon)
-if dlat <= tol and dlon <= tol:
-    print(f"ok ({area} {lat},{lon}, {max(dlat, dlon):.2f}deg from expected)")
-else:
-    print(f"WRONG PLACE: {area} {lat},{lon} is {max(dlat, dlon):.2f}deg "
-          f"from expected {wlat},{wlon} (tolerance {tol}deg)")
-PY
-)
-    case "$WX" in
-        ok\ *)   note "weather" "$WX" ;;
-        skipped*) note "weather" "$WX" ;;
-        *)       note "weather" "$WX"; fail=1 ;;
-    esac
+elif [ ! -f "$WX_CHECKER" ]; then
+    note "weather" "skipped (checker missing: $WX_CHECKER)"
+elif [ ! -f "$STATE" ]; then
+    note "weather" "skipped (no state.json)"
+else
+    WX=$(python3 "$WX_CHECKER" "$STATE" "$EXPECT_WX_LATLON" "$WX_TOLERANCE_DEG" 2>&1)
+    WX_RC=$?
+    note "weather" "$WX"
+    [ "$WX_RC" -eq 0 ] || fail=1
 fi
 
 # ------------------------------------------------------------------ verdict

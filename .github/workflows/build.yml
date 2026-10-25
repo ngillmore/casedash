@@ -101,3 +101,74 @@ jobs:
           assert m.WX_LOCATION == "London", m.WX_LOCATION
           print("overrides ok")
           PY
+
+  verify:
+    name: Verifier logic (content checks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Byte-compile the checker
+        run: python3 -m py_compile collector/casedash_verify.py
+
+      # The weather check is the only thing in the project that can catch a
+      # live-but-wrong reading, so its own logic must be tested. Without this
+      # job, a future edit to the comparison silently stops catching the very
+      # bug it was written for.
+      - name: Run content-check tests
+        run: python3 tests/test_verify_content.py
+
+      # The checker is a real CLI used by verify.sh; exercise the contract
+      # (exit 1 only on a definite mismatch) end to end.
+      - name: CLI contract -- matching location passes
+        run: |
+          cat > /tmp/state.json <<'JSON'
+          {"ts":1,"weather":{"area":"Little Rock","lat":34.746,"lon":-92.289}}
+          JSON
+          python3 collector/casedash_verify.py /tmp/state.json 34.746,-92.289
+
+      - name: CLI contract -- wrong continent fails
+        run: |
+          cat > /tmp/state.json <<'JSON'
+          {"ts":1,"weather":{"area":"Campo Salles","lat":-33.4,"lon":-60.233}}
+          JSON
+          if python3 collector/casedash_verify.py /tmp/state.json 34.746,-92.289; then
+            echo "::error::the Argentina regression is no longer caught"
+            exit 1
+          fi
+          echo "wrong location correctly rejected"
+
+      - name: CLI contract -- unevaluable data is not a failure
+        run: |
+          echo '{"ts":1}' > /tmp/state.json
+          python3 collector/casedash_verify.py /tmp/state.json 34.746,-92.289
+
+      # verify.sh must be syntactically valid and must not hard-depend on the
+      # hardware it inspects -- on CI there is no KWin and no panel.
+      - name: verify.sh is valid bash
+        run: bash -n verify.sh
+
+      - name: verify.sh degrades gracefully with no panel and no state
+        run: |
+          set +e
+          CASEDASH_VERIFY_WX_LATLON=34.746,-92.289 \
+            XDG_RUNTIME_DIR=/tmp/nonexistent-runtime \
+            ./verify.sh
+          rc=$?
+          # No panel on CI means a non-zero verdict is expected; what matters is
+          # that it reports the weather step rather than crashing on it.
+          echo "verify.sh exited $rc (non-zero expected: no KWin on CI)"
+          [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || exit 1
+
+      - name: verify.sh reports the weather step in its output
+        run: |
+          CASEDASH_VERIFY_WX_LATLON=34.746,-92.289 \
+            XDG_RUNTIME_DIR=/tmp/nonexistent-runtime \
+            ./verify.sh 2>&1 | tee /tmp/verify.out
+          grep -q "weather" /tmp/verify.out || {
+            echo "::error::verify.sh no longer reports a weather step"
+            exit 1
+          }
