@@ -125,6 +125,7 @@ class TestLayoutBudget(unittest.TestCase):
         for name in [
             "hHeaderMeasured", "hGaugeRow", "hUps", "hSystem",
             "hStorageBase", "hStoragePerDisk", "hSpacer",
+            "hUpsRows", "barH",
             "hCpuCard", "hGpuCard", "hNetCard",
             "panelHeight", "sectionCount",
         ]:
@@ -159,6 +160,7 @@ class TestLayoutBudget(unittest.TestCase):
         # These are consumed by main.qml's Layout.preferredHeight bindings.
         for name in ["hGaugeRow", "hCpuCard", "hGpuCard", "hNetCard", "hUps",
                      "hStorageBase", "hStoragePerDisk", "hSpacer",
+            "hUpsRows", "barH",
                      "hSystemRows", "headerWxGap"]:
             with self.subTest(name=name):
                 self.assertIn(f"Ui.{name}", self.main_src,
@@ -250,14 +252,8 @@ class TestLayoutBudget(unittest.TestCase):
         was 8 rows * 35px + chrome = 388. A budget that fits the panel is not
         enough -- each card must also fit its own content.
         """
-        # Mirror Ui.rowsCardH() in Python.
-        chrome = (
-            s(self.ui["cardPadTop"], self.scale)
-            + s(self.ui["cardHeadH"], self.scale)
-            + s(self.ui["cardHeadGap"], self.scale)
-            + s(self.ui["cardPadBot"], self.scale)
-        )
-        row_h = round(s(15, self.scale) * 1.39) + s(self.ui["kvPad"], self.scale)
+        chrome = self._chrome()
+        row_h = self._row_h()
         rows = int(self.ui["hSystemRows"])
         gap = s(2, self.scale)
         needed = chrome + rows * row_h + (rows - 1) * gap
@@ -288,10 +284,63 @@ class TestLayoutBudget(unittest.TestCase):
             f"{int(self.ui['hSystemRows'])}",
         )
 
+    def test_ups_card_is_tall_enough_for_rows_and_bar(self):
+        """The UPS card must fit its rows AND its trailing progress bar.
+
+        The charge bar hung off the bottom of the card background because the
+        height was a literal (105 = 163px) that ignored both the bar's height and
+        the spacing before it. 185px were needed.
+        """
+        chrome = self._chrome()
+        row_h = self._row_h()
+        rows = int(self.ui["hUpsRows"])
+        bars = 1
+        sp = s(4, self.scale)
+        needed = chrome + rows * row_h + bars * s(self.ui["barH"], self.scale) \
+                 + (rows + bars - 1) * sp
+        have = s(self.ui["hUps"], self.scale)
+        self.assertGreaterEqual(
+            have, needed,
+            f"UPS card is {needed - have}px too short for {rows} rows + "
+            f"{bars} bar (has {have}, needs {needed}) -- the bar will overflow",
+        )
+
+    def test_ups_card_declares_a_bar(self):
+        """Guard against the bar being dropped without updating the height.
+
+        If the charge bar is ever removed, hUps must shrink to match -- a card
+        sized for a bar it no longer has is wasted space, and this test is the
+        reminder to update both.
+        """
+        block = self._card_block("UPS")
+        self.assertIsNotNone(block, "could not locate the UPS card in main.qml")
+        assert block is not None
+        bars = len(re.findall(r"^\s+ProgressBar \{", block, re.M))
+        self.assertEqual(
+            bars, 1,
+            f"UPS card has {bars} ProgressBar(s); Ui.hUps/hUpsRows are sized "
+            f"for exactly 1 -- update both if this is intentional",
+        )
+
+    def _chrome(self) -> int:
+        return (
+            s(self.ui["cardPadTop"], self.scale)
+            + s(self.ui["cardHeadH"], self.scale)
+            + s(self.ui["cardHeadGap"], self.scale)
+            + s(self.ui["cardPadBot"], self.scale)
+        )
+
+    def _row_h(self) -> int:
+        return round(s(15, self.scale) * 1.39) + s(self.ui["kvPad"], self.scale)
+
     def _card_block(self, title: str) -> str | None:
-        """Extract the source of the Card whose title matches `title`."""
+        """Extract the source of the Card whose title starts with `title`.
+
+        Matches a title that is either the bare literal (`title: "SYSTEM"`) or
+        the start of an interpolated one (`title: "UPS  ·  " + ...`).
+        """
         m = re.search(
-            rf'title:\s*"{re.escape(title)}"',
+            rf'title:\s*"{re.escape(title)}',
             self.main_src,
         )
         if not m:

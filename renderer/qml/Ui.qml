@@ -133,7 +133,13 @@ QtObject {
     // flush, which read as cramped; this is the only knob for that spacing.
     readonly property real headerWxGap: 22
     readonly property int hGaugeRow:    300
-    readonly property int hUps:         105   // 2 rows + 1 bar + chrome
+    // UPS: 2 KeyValue rows + 1 progress bar + chrome, DERIVED from the same
+    // measured row height as everything else. The old hand-written 105 (= 163px)
+    // was 22px short of the 185px the content needs, so the charge bar hung off
+    // the bottom of the card background -- the same class of bug as the SYSTEM
+    // card's clipped DISPLAYS row.
+    readonly property int hUpsRows: 2
+    readonly property int hUps: 120   // == upsCardH()/scale, see the test
     // SYSTEM: 8 rows, derived from kvRowH so it cannot drift from the text.
     // 8 rows + 7 gaps of s(2) + card chrome = 388px at scale 1.55 = 251 units.
     readonly property int hSystemRows: 8
@@ -156,6 +162,19 @@ QtObject {
         return cardChrome()
              + rows * kvRowH
              + Math.max(0, rows - 1) * s(2)
+    }
+
+    // Height a card needs for `rows` KeyValue rows plus `bars` progress bars,
+    // using `spacing` between them. Generalises rowsCardH: a card that ends in a
+    // bar needs the bar's height AND the spacing before it, which is exactly
+    // what the UPS card was missing.
+    function cardH(rows, bars, spacing) {
+        var sp = (spacing === undefined) ? s(4) : spacing
+        var n = Math.max(1, rows + bars)
+        return cardChrome()
+             + rows * kvRowH
+             + bars * barH
+             + (n - 1) * sp
     }
 
     // Does the layout fit? Returns the arithmetic so a failure is diagnosable.

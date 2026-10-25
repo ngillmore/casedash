@@ -383,7 +383,10 @@ Window {
             // ============================================================ UPS
             Card {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Ui.s(Ui.hUps)
+                // Height DERIVED from its contents (2 rows + 1 bar + chrome).
+                // The old literal was 22px short and the charge bar hung off the
+                // bottom of the card background.
+                Layout.preferredHeight: Ui.cardH(Ui.hUpsRows, 1, Ui.s(4))
                 title: "UPS  ·  " + (win.ups.status || "--")
                 accent: (win.ups.status || "").indexOf("ONBATT") >= 0 ? (Backend.theme.warn || "#ff6b6b") : (Backend.theme.ok || "#7dd87d")
 
