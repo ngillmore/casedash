@@ -92,4 +92,55 @@ QtObject {
     function cardChrome() {
         return cardPadTop + cardHeadH + cardHeadGap + cardPadBot
     }
+
+    // ------------------------------------------------------- vertical budget
+    // The panel is a fixed 3840px tall and the section ColumnLayout does not
+    // scroll. If the sum of the section heights exceeds the content box, QML
+    // does not clip or shrink -- it lets adjacent cards OVERLAP, and the last
+    // card's content slides under the next one. That is not obvious from the
+    // source, and it is exactly how the CPU sparkline ended up rendering behind
+    // the GPU card when `scale` was raised: the fixed sections grew, the three
+    // Layout.fillHeight cards kept stale preferredHeight hints, and the total
+    // went ~190px over budget.
+    //
+    // These constants let the arithmetic be checked instead of eyeballed. The
+    // numbers here MUST match the corresponding Layout.preferredHeight values in
+    // main.qml; verify.sh and the QML tests assert that they do.
+    readonly property int panelHeight: 3840
+    readonly property int sectionCount: 9   // 8 cards/blocks + trailing spacer
+
+    // Fixed (non-fillHeight) sections, in base units.
+    readonly property int hHeaderBlock: 260   // clock + date + weather, content-sized
+    readonly property int hGaugeRow:    300
+    readonly property int hUps:         105   // 2 rows + 1 bar + chrome
+    readonly property int hSystem:      230   // 8 rows + chrome
+    readonly property int hStorageBase:  50   // + hStoragePerDisk * diskCount
+    readonly property int hStoragePerDisk: 84
+    readonly property int hSpacer:       20
+
+    // Layout.fillHeight sections. These get the leftover, but their sum must
+    // still be small enough to fit or QML resolves the overflow by overlapping.
+    readonly property int hCpuCard: 210
+    readonly property int hGpuCard: 200
+    readonly property int hNetCard: 300
+
+    // Total vertical demand for a given number of disks, at the current scale.
+    function layoutBudget(diskCount) {
+        var fixed = s(hHeaderBlock) + s(hGaugeRow) + s(hUps)
+                  + s(hStorageBase) + s(hStoragePerDisk) * Math.max(1, diskCount)
+                  + s(hSystem) + s(hSpacer)
+        var fill = s(hCpuCard) + s(hGpuCard) + s(hNetCard)
+        var gaps = colSpacing * (sectionCount - 1)
+        var content = panelHeight - 2 * margin
+        var needed = fixed + fill + gaps
+        return {
+            "fixed": fixed,
+            "fill": fill,
+            "gaps": gaps,
+            "content": content,
+            "needed": needed,
+            "slack": content - needed,
+            "fits": needed <= content
+        }
+    }
 }

@@ -159,7 +159,7 @@ Every font size, padding and row pitch derives from **one number**: `scale` in
 
 ```bash
 # edit renderer/qml/Ui.qml -> readonly property real scale: 1.55
-systemctl --user restart casedash.service
+./renderer/build.sh && systemctl --user restart casedash.service
 ```
 
 Why a scale factor instead of just bigger literals: the panel is 1100×3840 and
@@ -178,8 +178,29 @@ Two things worth knowing before you change it:
   the gauges starved the value column until `10726 / 24564 MB` elided. The gauges
   were never the readability problem, so they grow less and hand the width back.
 
-Practical ceiling is about `scale: 1.7`; past that the STORAGE and SYSTEM value
-columns start eliding.
+### The vertical budget (read this before changing `scale`)
+
+The panel is a **fixed 3840px tall and the section layout does not scroll.** If
+the sections add up to more than that, QML does **not** clip or shrink them — it
+lets adjacent cards **overlap**, and the content of one card renders on top of
+the next. That is invisible in the source. It is how the CPU sparkline ended up
+sliding out from under the GPU card when `scale` was raised to 1.55: the fixed
+sections grew, the three `Layout.fillHeight` cards kept stale `preferredHeight`
+hints, and the total went ~190px over budget.
+
+Every section height is now a named constant in `Ui.qml` (`hCpuCard`,
+`hGpuCard`, `hSystem`, …), and `main.qml` references those constants rather than
+literals. `Ui.layoutBudget(diskCount)` computes whether a given configuration
+fits, and `tests/test_layout_budget.py` asserts it — including that no section
+hardcodes its own height, which is how the drift starts.
+
+```bash
+python3 tests/test_layout_budget.py    # prints the budget table, then asserts
+```
+
+At `scale: 1.55` with two disks the layout now has ~660px of slack, and it still
+fits at 1.65. Push past that and the STORAGE and SYSTEM value columns start
+eliding before the budget runs out.
 
 ## Verifying it actually works
 
@@ -212,11 +233,20 @@ unverified is just a second thing that can silently lie to you.
 
 ```bash
 python3 tests/test_verify_content.py   # 30 tests, stdlib only
+python3 tests/test_layout_budget.py    # 9 tests: the vertical budget fits
+python3 tests/test_qml_syntax.py       # 4 tests: QML parses (uses qmllint)
 ```
 
-No pytest required. CI runs this plus a CLI-contract check on every push, and
-includes an explicit regression test for the Argentina bug: if a future edit
+No pytest required. CI runs all three plus a CLI-contract check on every push,
+and includes an explicit regression test for the Argentina bug: if a future edit
 makes the comparison stop catching a wrong continent, the build fails.
+
+`test_qml_syntax.py` exists because a scripted edit once closed a string literal
+early in `main.qml` (`title: "GPU UTILISATION"  ·  " + ...`). Every Python test
+passed, the file looked plausible, and the only symptom was the renderer
+crash-looping with `Expected token ','` in the journal — found after a rebuild
+and a restart, on the live panel. QML syntax errors are cheap to catch and
+expensive to miss.
 
 `casedash_verify.py` also works standalone against any `state.json`:
 
@@ -231,7 +261,9 @@ python3 collector/casedash_verify.py \
 ```
 collector/casedash_collector.py   telemetry daemon -> state.json
 collector/casedash_verify.py      content-plausibility checks (unit-tested)
-tests/test_verify_content.py      tests for the above, stdlib only
+tests/test_verify_content.py      tests: weather content comparison
+tests/test_layout_budget.py       tests: vertical budget fits the panel
+tests/test_qml_syntax.py          tests: every QML file parses
 renderer/src/host.cpp             Qt6 C++ QML host + LayerShellQt output pinning
 renderer/qml/                     QML UI
 renderer/qml/Ui.qml               layout + type metrics (the `scale` knob)

@@ -127,14 +127,19 @@ Window {
         spacing: Ui.colSpacing
 
             // ============================================ clock + date + weather
+            // Sized to content rather than a fixed 465px. The old fixed height
+            // left ~100px of dead space between the weather line and the gauges,
+            // which is space the fillHeight cards below need more than this
+            // block does. Column drives the height via implicitHeight.
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Ui.s(300)
+                Layout.preferredHeight: Math.max(Ui.s(Ui.hHeaderBlock), headCol.implicitHeight)
 
                 Column {
+                    id: headCol
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
-                    spacing: Ui.s(-6)
+                    spacing: Ui.s(2)
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -153,34 +158,33 @@ Window {
                         font.pixelSize: Ui.fsDate
                         font.letterSpacing: Ui.s(1)
                     }
-                }
 
-                // Weather, right under the date.
-                Row {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    spacing: Ui.s(10)
+                    // Weather, right under the date.
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: Ui.s(10)
 
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: win.wxGlyph(win.wx.code)
-                        color: (Backend.theme.accent || "#C86414")
-                        font.pixelSize: Ui.fsWxGlyph
-                    }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: win.wx.temp_f !== undefined ? win.wx.temp_f + "°F" : "--"
-                        color: (Backend.theme.foreground || "#e8e8e8")
-                        font.family: "Noto Sans"
-                        font.pixelSize: Ui.fsWxTemp
-                        font.bold: true
-                    }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: (win.wx.desc || "") + (win.wx.area ? "  ·  " + win.wx.area : "")
-                        color: (Backend.theme.muted || "#8a8a8a")
-                        font.family: "Noto Sans"
-                        font.pixelSize: Ui.fsWxDesc
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: win.wxGlyph(win.wx.code)
+                            color: (Backend.theme.accent || "#C86414")
+                            font.pixelSize: Ui.fsWxGlyph
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: win.wx.temp_f !== undefined ? win.wx.temp_f + "°F" : "--"
+                            color: (Backend.theme.foreground || "#e8e8e8")
+                            font.family: "Noto Sans"
+                            font.pixelSize: Ui.fsWxTemp
+                            font.bold: true
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: (win.wx.desc || "") + (win.wx.area ? "  ·  " + win.wx.area : "")
+                            color: (Backend.theme.muted || "#8a8a8a")
+                            font.family: "Noto Sans"
+                            font.pixelSize: Ui.fsWxDesc
+                        }
                     }
                 }
             }
@@ -188,7 +192,7 @@ Window {
             // ================================================== CPU + GPU gauges
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Ui.s(300)
+                Layout.preferredHeight: Ui.s(Ui.hGaugeRow)
                 spacing: Ui.s(8)
 
                 CircularGauge {
@@ -260,10 +264,17 @@ Window {
             }
 
             // ================================================ per-core CPU bars
+            // Layout.fillHeight: this card takes a share of whatever vertical
+            // space the fixed sections leave. The preferredHeight below is only
+            // a hint for the initial pass -- the real height comes from the
+            // leftover distribution. It MUST stay small enough that the sum of
+            // all hints fits the panel, or QML resolves the overflow by letting
+            // cards overlap (which is how the CPU sparkline ended up sliding
+            // under the GPU card). See layoutBudget() in Ui.qml.
             Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: Ui.s(300)
+                Layout.preferredHeight: Ui.s(Ui.hCpuCard)
                 title: win.cpu.model || "CPU"
                 rightLabel: win.pct(win.cpu.load, 1)
 
@@ -273,12 +284,13 @@ Window {
 
                     CoreBars {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Ui.s(150)
+                        Layout.preferredHeight: Ui.s(120)
                         values: win.cpu.cores || []
                     }
                     Sparkline {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Ui.s(90)
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: Ui.s(50)
                         samples: win.hist.cpu || []
                         floorMax: 100
                         ceiling: 100
@@ -291,7 +303,7 @@ Window {
             Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: Ui.s(260)
+                Layout.preferredHeight: Ui.s(Ui.hGpuCard)
                 title: "GPU UTILISATION  ·  " + (win.sys.gpu_model || "RTX 4090")
                 rightLabel: win.pct(win.gpu.util, 0)
 
@@ -307,7 +319,7 @@ Window {
             Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: Ui.s(340)
+                Layout.preferredHeight: Ui.s(Ui.hNetCard)
                 title: "NETWORK  ·  " + (win.net.iface || "")
 
                 ColumnLayout {
@@ -358,13 +370,13 @@ Window {
             // ============================================================ UPS
             Card {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Ui.s(300)
+                Layout.preferredHeight: Ui.s(Ui.hUps)
                 title: "UPS  ·  " + (win.ups.status || "--")
                 accent: (win.ups.status || "").indexOf("ONBATT") >= 0 ? (Backend.theme.warn || "#ff6b6b") : (Backend.theme.ok || "#7dd87d")
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: Ui.s(6)
+                    spacing: Ui.s(4)
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -396,6 +408,9 @@ Window {
                                   ? win.num(win.ups.runtime, 1) + " min left" : ""
                         valueColor: (win.ups.charge || 0) < 50 ? (Backend.theme.warn || "#ff6b6b") : (Backend.theme.ok || "#7dd87d")
                     }
+                    // One bar only. The old second bar duplicated the LOAD
+                    // percentage that the row above already prints as a trailing
+                    // value, and cost vertical space the CPU chart needed.
                     ProgressBar {
                         Layout.fillWidth: true
                         value: (win.ups.charge || 0) / 100
@@ -403,18 +418,13 @@ Window {
                         alertAt: 1.1
                         warnAt: 1.1
                     }
-                    ProgressBar {
-                        Layout.fillWidth: true
-                        value: (win.ups.load_pct || 0) / 100
-                        barHeight: Ui.barHThin
-                    }
                 }
             }
 
             // ====================================================== disk usage
             Card {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Ui.s(50) + Ui.s(84) * Math.max(1, win.disks.length)
+                Layout.preferredHeight: Ui.s(Ui.hStorageBase) + Ui.s(Ui.hStoragePerDisk) * Math.max(1, win.disks.length)
                 title: "STORAGE"
                 // Show both directions; the old label was just the write rate
                 // with no indication of what it was.
@@ -453,8 +463,9 @@ Window {
             Card {
                 Layout.fillWidth: true
                 // Row pitch must track the scaled line height, or the last rows
-                // run past the card and get clipped.
-                Layout.preferredHeight: Ui.s(30) + (Ui.fsValue + Ui.s(18)) * 10
+                // run past the card and get clipped. 8 rows now (PACKAGES and
+                // the second DISPLAYS row were dropped to buy vertical space).
+                Layout.preferredHeight: Ui.s(Ui.hSystem)
                 title: "SYSTEM"
 
                 ColumnLayout {
@@ -473,12 +484,14 @@ Window {
                         label: "HOST"
                         value: win.sys.host || "--"
                     }
+                    // No trailing load average here: the CPU card header already
+                    // shows load as a large percentage, so this was the same
+                    // number twice in a less readable format.
                     KeyValue {
                         Layout.fillWidth: true
                         labelWidth: Ui.s(150)
                         label: "UPTIME"
                         value: win.uptime(win.st.uptime_s)
-                        trailing: "load " + win.num((win.cpu.load_avg || [0])[0], 2)
                     }
                     KeyValue {
                         Layout.fillWidth: true
@@ -492,18 +505,14 @@ Window {
                         label: "DESKTOP"
                         value: (win.sys.de || "") + " / " + (win.sys.wm || "")
                     }
-                    KeyValue {
-                        Layout.fillWidth: true
-                        labelWidth: Ui.s(150)
-                        label: "PACKAGES"
-                        value: win.sys.packages !== undefined ? String(win.sys.packages) : "--"
-                    }
+                    // No trailing percentage: the value already reads
+                    // "3.1 GB / 61.9 GB", so "5%" was noise on a line that is
+                    // never the interesting one.
                     KeyValue {
                         Layout.fillWidth: true
                         labelWidth: Ui.s(150)
                         label: "SWAP"
                         value: win.mb(win.swap.used_mb) + " / " + win.mb(win.swap.total_mb)
-                        trailing: win.pct(win.swap.pct, 0)
                     }
                     KeyValue {
                         Layout.fillWidth: true
@@ -512,25 +521,21 @@ Window {
                         value: win.net.ip || "--"
                         mono: true
                     }
-                    // Displays: stacked, because there are two of them.
+                    // One row, both displays, comma-separated. The old layout used
+                    // a second KeyValue with a blank label, which left an orphan
+                    // row when only one display was connected.
                     KeyValue {
                         Layout.fillWidth: true
                         labelWidth: Ui.s(150)
                         label: "DISPLAYS"
                         value: (win.sys.displays || []).length > 0
-                               ? (win.sys.displays[0] || "").replace(" (primary)", "") : "--"
-                    }
-                    KeyValue {
-                        Layout.fillWidth: true
-                        labelWidth: Ui.s(150)
-                        label: ""
-                        value: (win.sys.displays || []).length > 1
-                               ? (win.sys.displays[1] || "").replace(" (primary)", "") : ""
+                               ? (win.sys.displays || []).join(", ").replace(/ \(primary\)/g, "")
+                               : "--"
                     }
                 }
             }
 
-            Item { Layout.fillWidth: true; Layout.preferredHeight: Ui.s(20) }
+            Item { Layout.fillWidth: true; Layout.preferredHeight: Ui.s(Ui.hSpacer) }
     }
 
     // ------------------------------------------------------------ stale banner

@@ -121,6 +121,19 @@ jobs:
       - name: Run content-check tests
         run: python3 tests/test_verify_content.py
 
+      # The panel is a fixed 3840px tall with no scrolling. If the sections
+      # exceed it, QML overlaps them rather than clipping -- which is how the
+      # CPU sparkline ended up rendering behind the GPU card. This asserts the
+      # arithmetic instead of trusting the eye.
+      - name: Run layout budget tests
+        run: python3 tests/test_layout_budget.py
+
+      # A scripted edit once closed a string literal early in main.qml. Every
+      # Python test still passed; the renderer crash-looped with a QML parse
+      # error that only showed up in the journal after a rebuild. Catch it here.
+      - name: Run QML syntax tests
+        run: python3 tests/test_qml_syntax.py
+
       # The checker is a real CLI used by verify.sh; exercise the contract
       # (exit 1 only on a definite mismatch) end to end.
       - name: CLI contract -- matching location passes
