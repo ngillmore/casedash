@@ -85,7 +85,7 @@ class Budget:
         c, sc = self.c, self.scale
         disks = max(1, disk_count)
         fixed = (
-            s(c["hHeaderBlock"], sc)
+            s(c["hHeaderMeasured"], sc)
             + s(c["hGaugeRow"], sc)
             + s(c["hUps"], sc)
             + s(c["hStorageBase"], sc)
@@ -93,18 +93,20 @@ class Budget:
             + s(c["hSystem"], sc)
             + s(c["hSpacer"], sc)
         )
-        fill = s(c["hCpuCard"], sc) + s(c["hGpuCard"], sc) + s(c["hNetCard"], sc)
+        hints = s(c["hCpuCard"], sc) + s(c["hGpuCard"], sc) + s(c["hNetCard"], sc)
         gaps = s(c["colSpacing"], sc) * (int(c["sectionCount"]) - 1)
         content = PANEL_H - 2 * s(c["margin"], sc)
-        needed = fixed + fill + gaps
+        needed = fixed + hints + gaps
+        leftover = content - fixed - gaps
         return {
             "fixed": fixed,
-            "fill": fill,
+            "hints": hints,
+            "leftover": leftover,
             "gaps": gaps,
             "content": content,
             "needed": needed,
             "slack": content - needed,
-            "fits": needed <= content,
+            "fits": needed <= content and leftover > 0,
             "disks": disks,
         }
 
@@ -121,7 +123,7 @@ class TestLayoutBudget(unittest.TestCase):
     # ------------------------------------------------------------- parsing
     def test_constants_present(self):
         for name in [
-            "hHeaderBlock", "hGaugeRow", "hUps", "hSystem",
+            "hHeaderMeasured", "hGaugeRow", "hUps", "hSystem",
             "hStorageBase", "hStoragePerDisk", "hSpacer",
             "hCpuCard", "hGpuCard", "hNetCard",
             "panelHeight", "sectionCount",
@@ -142,21 +144,31 @@ class TestLayoutBudget(unittest.TestCase):
     def test_every_section_height_references_a_ui_constant(self):
         """No section may hardcode its height -- that is how drift starts."""
         # Every Layout.preferredHeight in the section ColumnLayout must be
-        # expressed via Ui.* rather than a bare number.
+        # expressed via Ui.* (or a content-derived implicitHeight), never a bare
+        # number. A hardcoded literal is how the heights desynced from `scale`.
         heights = re.findall(r"Layout\.preferredHeight:\s*(.+)", self.main_src)
         self.assertGreaterEqual(len(heights), 9, "expected at least 9 sections")
         for h in heights:
             with self.subTest(height=h.strip()):
-                self.assertIn("Ui.", h,
-                              f"hardcoded section height: {h.strip()!r}")
+                self.assertTrue(
+                    "Ui." in h or "implicitHeight" in h,
+                    f"hardcoded section height: {h.strip()!r}",
+                )
 
     def test_expected_constants_are_actually_used(self):
-        for name in ["hHeaderBlock", "hGaugeRow", "hCpuCard", "hGpuCard",
-                     "hNetCard", "hUps", "hSystem", "hStorageBase",
-                     "hStoragePerDisk", "hSpacer"]:
+        # These are consumed by main.qml's Layout.preferredHeight bindings.
+        for name in ["hGaugeRow", "hCpuCard", "hGpuCard", "hNetCard", "hUps",
+                     "hStorageBase", "hStoragePerDisk", "hSpacer",
+                     "hSystemRows", "headerWxGap"]:
             with self.subTest(name=name):
                 self.assertIn(f"Ui.{name}", self.main_src,
                               f"Ui.{name} is defined but never used in main.qml")
+        # hSystem and hHeaderMeasured feed the budget arithmetic in Ui.qml
+        # itself rather than a main.qml binding, so check them against Ui.qml.
+        for name in ["hSystem", "hHeaderMeasured"]:
+            with self.subTest(name=name):
+                self.assertIn(name, self.ui_src,
+                              f"{name} is missing from Ui.qml")
 
     def test_fillheight_card_count_matches_budget(self):
         # The budget assumes exactly three top-level Layout.fillHeight SECTIONS.
@@ -229,6 +241,75 @@ class TestLayoutBudget(unittest.TestCase):
                     f"{name}={self.ui[name]} is below the usable floor {floor}",
                 )
 
+    # ------------------------------------------------- content fits the card
+    def test_system_card_is_tall_enough_for_its_rows(self):
+        """The SYSTEM card must not clip its last row.
+
+        This is the bug that produced DISPLAYS with its lower half off the card:
+        the card's height was a hand-written literal (230) while the real demand
+        was 8 rows * 35px + chrome = 388. A budget that fits the panel is not
+        enough -- each card must also fit its own content.
+        """
+        # Mirror Ui.rowsCardH() in Python.
+        chrome = (
+            s(self.ui["cardPadTop"], self.scale)
+            + s(self.ui["cardHeadH"], self.scale)
+            + s(self.ui["cardHeadGap"], self.scale)
+            + s(self.ui["cardPadBot"], self.scale)
+        )
+        row_h = round(s(15, self.scale) * 1.39) + s(self.ui["kvPad"], self.scale)
+        rows = int(self.ui["hSystemRows"])
+        gap = s(2, self.scale)
+        needed = chrome + rows * row_h + (rows - 1) * gap
+        have = s(self.ui["hSystem"], self.scale)
+        # Ui.hSystem must be at least what rowsCardH computes, or the card is
+        # declared shorter than its own contents.
+        self.assertGreaterEqual(
+            have, needed,
+            f"SYSTEM card is {needed - have}px too short for {rows} rows "
+            f"(has {have}, needs {needed}) -- the last row will be clipped",
+        )
+
+    def test_system_rows_matches_the_actual_row_count(self):
+        """Ui.hSystemRows must equal the number of KeyValue rows in the card.
+
+        Cheap to get wrong when adding or removing a line, and the symptom is a
+        clipped card rather than an error.
+        """
+        block = self._card_block("SYSTEM")
+        self.assertIsNotNone(block, "could not locate the SYSTEM card in main.qml")
+        assert block is not None  # narrow for the type checker
+        # Count KeyValue instances that are direct children of the card's
+        # ColumnLayout: those are indented one level deeper than the layout.
+        rows = len(re.findall(r"^\s+KeyValue \{", block, re.M))
+        self.assertEqual(
+            rows, int(self.ui["hSystemRows"]),
+            f"SYSTEM card has {rows} rows but Ui.hSystemRows is "
+            f"{int(self.ui['hSystemRows'])}",
+        )
+
+    def _card_block(self, title: str) -> str | None:
+        """Extract the source of the Card whose title matches `title`."""
+        m = re.search(
+            rf'title:\s*"{re.escape(title)}"',
+            self.main_src,
+        )
+        if not m:
+            return None
+        # Walk back to the enclosing `Card {` and forward to its matching brace.
+        start = self.main_src.rfind("Card {", 0, m.start())
+        if start < 0:
+            return None
+        depth = 0
+        for i in range(start, len(self.main_src)):
+            if self.main_src[i] == "{":
+                depth += 1
+            elif self.main_src[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.main_src[start:i + 1]
+        return None
+
 
 if __name__ == "__main__":
     # Print the budget table for humans, then run the assertions.
@@ -236,12 +317,16 @@ if __name__ == "__main__":
     _scale = parse_scale(_read(UI_QML))
     _b = Budget(_ui, _scale)
     print(f"scale = {_scale}")
-    print(f"{'disks':>6} {'fixed':>7} {'fill':>6} {'gaps':>6} "
-          f"{'needed':>7} {'content':>8} {'slack':>7}  fits")
+    print(f"{'disks':>6} {'fixed':>7} {'hints':>6} {'gaps':>6} "
+          f"{'leftover':>9} {'perCard':>8} {'needed':>7} {'content':>8}  fits")
     for d in range(1, 7):
         r = _b.compute(d)
-        print(f"{d:>6} {r['fixed']:>7} {r['fill']:>6} {r['gaps']:>6} "
-              f"{r['needed']:>7} {r['content']:>8} {r['slack']:>7}  "
+        print(f"{d:>6} {r['fixed']:>7} {r['hints']:>6} {r['gaps']:>6} "
+              f"{r['leftover']:>9} {r['leftover'] // 3:>8} "
+              f"{r['needed']:>7} {r['content']:>8}  "
               f"{'yes' if r['fits'] else 'NO -- OVERFLOW'}")
+    print()
+    print("fillHeight cards absorb the leftover, so 'leftover' is the space the")
+    print("CPU/GPU/NET cards actually share and 'hints' is only a lower bound.")
     print()
     unittest.main(verbosity=2)

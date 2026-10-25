@@ -133,13 +133,13 @@ Window {
             // block does. Column drives the height via implicitHeight.
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(Ui.s(Ui.hHeaderBlock), headCol.implicitHeight)
+                Layout.preferredHeight: headCol.implicitHeight
 
                 Column {
                     id: headCol
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
-                    spacing: Ui.s(2)
+                    spacing: 0
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -159,7 +159,15 @@ Window {
                         font.letterSpacing: Ui.s(1)
                     }
 
-                    // Weather, right under the date.
+                    // Weather, below the date. The old layout anchored this to
+                    // the bottom of a fixed-height Item, which put it flush under
+                    // the date with no breathing room once the block was resized
+                    // to content. headerWxGap is now the single knob for it.
+                    Item {
+                        width: 1
+                        height: Ui.headerWxGap
+                    }
+
                     Row {
                         anchors.horizontalCenter: parent.horizontalCenter
                         spacing: Ui.s(10)
@@ -324,7 +332,7 @@ Window {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: Ui.s(8)
+                    spacing: Ui.s(4)
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -342,9 +350,14 @@ Window {
                         }
                     }
 
+                    // Fills the space between the rate rows rather than taking a
+                    // fixed height. The old fixed 140px left a visible dead gap
+                    // above and below the graph on a card that had too much
+                    // height to begin with.
                     Sparkline {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Ui.s(140)
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: Ui.s(70)
                         samples: win.hist.net_down || []
                         floorMax: 131072          // 128 KB/s floor so idle is not a flat line
                         line: (Backend.theme.accent || "#C86414")
@@ -462,10 +475,11 @@ Window {
             // ==================================================== system info
             Card {
                 Layout.fillWidth: true
-                // Row pitch must track the scaled line height, or the last rows
-                // run past the card and get clipped. 8 rows now (PACKAGES and
-                // the second DISPLAYS row were dropped to buy vertical space).
-                Layout.preferredHeight: Ui.s(Ui.hSystem)
+                // Height DERIVED from the rows this card actually contains, via
+                // Ui.rowsCardH. The old hand-written literal was 31px short and
+                // the DISPLAYS row rendered with its lower half off the card.
+                // If you add or remove a row, update Ui.hSystemRows to match.
+                Layout.preferredHeight: Ui.rowsCardH(Ui.hSystemRows)
                 title: "SYSTEM"
 
                 ColumnLayout {

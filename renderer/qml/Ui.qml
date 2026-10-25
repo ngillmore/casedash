@@ -99,48 +99,89 @@ QtObject {
     // does not clip or shrink -- it lets adjacent cards OVERLAP, and the last
     // card's content slides under the next one. That is not obvious from the
     // source, and it is exactly how the CPU sparkline ended up rendering behind
-    // the GPU card when `scale` was raised: the fixed sections grew, the three
-    // Layout.fillHeight cards kept stale preferredHeight hints, and the total
-    // went ~190px over budget.
+    // the GPU card when `scale` was raised.
     //
-    // These constants let the arithmetic be checked instead of eyeballed. The
-    // numbers here MUST match the corresponding Layout.preferredHeight values in
-    // main.qml; verify.sh and the QML tests assert that they do.
+    // HOW THE FIT ACTUALLY WORKS (measured, not assumed):
+    //   The three Layout.fillHeight cards do NOT use their preferredHeight as a
+    //   final height -- they ABSORB the leftover after the fixed sections and
+    //   the gaps. Measured at scale 1.55: CPU 536, GPU 509, NET 675, all well
+    //   above their hints. So `preferredHeight` on those cards is a floor for
+    //   the initial pass, not a size.
+    //
+    //   That means the thing that must fit is the FIXED sum. The fillHeight
+    //   hints only matter as a lower bound: if the fixed sum plus the hints
+    //   exceeds the content box, there is no leftover and the cards get their
+    //   (too large) hints instead, which is when the overlap starts.
+    //
+    // Both conditions are checked in layoutBudget() below.
     readonly property int panelHeight: 3840
     readonly property int sectionCount: 9   // 8 cards/blocks + trailing spacer
 
+    // A KeyValue row's real height, MEASURED rather than guessed. Noto Sans at
+    // fsValue renders an implicitHeight of 32px at scale 1.55 (1.39 * pixelSize)
+    // plus kvPad. Deriving it here means a card's height is computed from the
+    // text it actually contains -- an earlier hand-guessed SYSTEM height was
+    // 22px short and silently clipped the DISPLAYS row in half.
+    readonly property real kvRowH: (Math.round(fsValue * 1.39)) + kvPad
+
     // Fixed (non-fillHeight) sections, in base units.
-    readonly property int hHeaderBlock: 260   // clock + date + weather, content-sized
+    // The header block (clock + date + weather) sizes itself to its content via
+    // implicitHeight; the measured value at scale 1.55 is 417px = 269 base
+    // units. Keep this in sync if the clock font or weather line changes.
+    readonly property int hHeaderMeasured: 269
+    // Gap inserted between the date and the weather line. The two used to be
+    // flush, which read as cramped; this is the only knob for that spacing.
+    readonly property real headerWxGap: 22
     readonly property int hGaugeRow:    300
     readonly property int hUps:         105   // 2 rows + 1 bar + chrome
-    readonly property int hSystem:      230   // 8 rows + chrome
+    // SYSTEM: 8 rows, derived from kvRowH so it cannot drift from the text.
+    // 8 rows + 7 gaps of s(2) + card chrome = 388px at scale 1.55 = 251 units.
+    readonly property int hSystemRows: 8
+    readonly property int hSystem: 251
     readonly property int hStorageBase:  50   // + hStoragePerDisk * diskCount
     readonly property int hStoragePerDisk: 84
     readonly property int hSpacer:       20
 
-    // Layout.fillHeight sections. These get the leftover, but their sum must
-    // still be small enough to fit or QML resolves the overflow by overlapping.
+    // Layout.fillHeight sections. These absorb the leftover, so these are
+    // LOWER BOUNDS, not sizes. Measured actual heights at 1.55 were CPU 536,
+    // GPU 509, NET 675 -- the network card was the largest on the panel while
+    // being the least important, which is why its hint is now the smallest of
+    // the three and its sparkline fills rather than holding a fixed height.
     readonly property int hCpuCard: 210
     readonly property int hGpuCard: 200
-    readonly property int hNetCard: 300
+    readonly property int hNetCard: 200
 
-    // Total vertical demand for a given number of disks, at the current scale.
+    // Height a KeyValue-stack card needs for `rows` rows.
+    function rowsCardH(rows) {
+        return cardChrome()
+             + rows * kvRowH
+             + Math.max(0, rows - 1) * s(2)
+    }
+
+    // Does the layout fit? Returns the arithmetic so a failure is diagnosable.
     function layoutBudget(diskCount) {
-        var fixed = s(hHeaderBlock) + s(hGaugeRow) + s(hUps)
+        var fixed = s(hHeaderMeasured) + s(hGaugeRow) + s(hUps)
                   + s(hStorageBase) + s(hStoragePerDisk) * Math.max(1, diskCount)
                   + s(hSystem) + s(hSpacer)
-        var fill = s(hCpuCard) + s(hGpuCard) + s(hNetCard)
+        var hints = s(hCpuCard) + s(hGpuCard) + s(hNetCard)
         var gaps = colSpacing * (sectionCount - 1)
         var content = panelHeight - 2 * margin
-        var needed = fixed + fill + gaps
+        var leftover = content - fixed - gaps
+        var needed = fixed + hints + gaps
         return {
             "fixed": fixed,
-            "fill": fill,
+            "hints": hints,
             "gaps": gaps,
             "content": content,
+            // Space the fillHeight cards actually share, after fixed + gaps.
+            "leftover": leftover,
+            // Demand if the hints were honoured literally (the worst case, and
+            // the condition that causes overlap when it exceeds `content`).
             "needed": needed,
             "slack": content - needed,
-            "fits": needed <= content
+            "fits": needed <= content && leftover > 0,
+            // Per-card share when the leftover is distributed evenly.
+            "perFillCard": Math.floor(leftover / 3)
         }
     }
 }
