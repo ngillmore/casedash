@@ -8,5 +8,10 @@ Type=oneshot
 # with a fully populated journal while the panel shows nothing. This check
 # asserts pixels and geometry instead of service state.
 ExecStart=%h/projects/casedash/verify.sh
+# Expected weather location for the content-plausibility check, as "lat,lon".
+# Freshness alone cannot catch a live-but-wrong reading: wttr.in's IP
+# geolocation once put this panel in Argentina from a perfectly fresh
+# state.json. Change this if you move. Unset = check skipped.
+Environment=CASEDASH_VERIFY_WX_LATLON=34.746,-92.289
 # Do not let a failed check take down anything else; it is a reporter.
 SuccessExitStatus=0

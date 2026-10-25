@@ -13,8 +13,11 @@ Environment=PYTHONUNBUFFERED=1
 # --- configuration (see the README's Configuration table) ---
 # Interface to graph. Find yours with: ip route get 1.1.1.1
 Environment=CASEDASH_NET_IFACE=enp77s0
-# wttr.in location slug; "auto" geolocates from your public IP.
-Environment=CASEDASH_WX_LOCATION=auto
+# wttr.in location, as "lat,lon" (a place name also works, but it is re-geocoded
+# on every resolve and that lookup is what once put this panel in Argentina).
+# Do NOT use "auto": wttr.in has no such slug and silently falls back to
+# IP geolocation. See the README's "Do not leave the weather location on auto".
+Environment=CASEDASH_WX_LOCATION=34.746,-92.289
 # %h expands to the invoking user's home, so this unit is not tied to one account.
 ExecStart=/usr/bin/python3 %h/projects/casedash/collector/casedash_collector.py
 Restart=always

@@ -102,12 +102,24 @@ exec "$HOME/projects/casedash/renderer/build/casedash" \
     "$HOME/projects/casedash/renderer/qml/main.qml"
 EOF
 
-# 3. Point the units at your clone (they ship with /home/yak paths).
-sed -i "s|/home/yak|$HOME|g" systemd/*.service systemd/*.timer verify.sh
-# ...and at your case screen's output name. Find it with: kscreen-doctor -o
+# 3. Point the units at your case screen's output name.
+#    The units themselves are already portable -- they use systemd's %h
+#    (home directory) specifier, so there is nothing to rewrite. (An earlier
+#    revision told you to `sed` /home/yak -> $HOME across systemd/*.service;
+#    that is now a no-op at best and corrupts any Environment= value containing
+#    the literal string at worst. Don't do it.)
+#    Find your output name with: kscreen-doctor -o
 sed -i "s|DP-1|YOUR-OUTPUT|g" ~/.local/bin/casedash-wayland-env.sh
 
-# 4. Install and start.
+# 4. Tell the verifier where your panel should think it is, so the content
+#    check can catch a live-but-wrong weather reading (see "Verifying it
+#    actually works"). Replace with your own lat,lon.
+sed -i "s|^Environment=CASEDASH_VERIFY_WX_LATLON=.*|Environment=CASEDASH_VERIFY_WX_LATLON=YOUR_LAT,YOUR_LON|" \
+    systemd/casedash-verify.service
+sed -i "s|^Environment=CASEDASH_WX_LOCATION=.*|Environment=CASEDASH_WX_LOCATION=YOUR_LAT,YOUR_LON|" \
+    systemd/casedash-collector.service
+
+# 5. Install and start.
 cp systemd/*.service systemd/*.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now casedash-collector.service casedash.service
@@ -122,8 +134,23 @@ The collector reads these from the environment (set them in
 | Variable | Default | What it does |
 |---|---|---|
 | `CASEDASH_NET_IFACE` | `enp77s0` | Interface to graph. Find yours: `ip route get 1.1.1.1` |
-| `CASEDASH_WX_LOCATION` | `auto` | [wttr.in](https://wttr.in) location slug. `auto` geolocates from your IP |
+| `CASEDASH_WX_LOCATION` | `34.746,-92.289` | [wttr.in](https://wttr.in) location. **Use `lat,lon`**; a place name also works but is re-geocoded each time. See the warning below. |
 | `CASEDASH_THEME` | `~/projects/casedash/renderer/qml/Theme.qml` | Where the generated palette lives |
+
+### Do not leave the weather location on `auto`
+
+wttr.in has **no `auto` slug**. Passing it does not error; it falls back to
+geolocating your public IP through a third-party database that has been observed
+mis-mapping consumer ISP ranges to the wrong continent. On this machine it
+resolved to **Campo Salles, Argentina** while the panel was correctly showing a
+fresh `state.json` and a healthy unit — the failure was invisible to every
+existing check.
+
+`auto` is still accepted and still resolves correctly most of the time, but it
+resolves **once at startup** and pins the resulting coordinates for the process
+lifetime, so a bad lookup persists until the collector restarts. Pinning a
+literal location removes the lookup entirely. `lat,lon` is the most robust
+option: it cannot be re-resolved, re-translated, or re-geocoded.
 
 ## Resizing the text
 
@@ -162,8 +189,20 @@ columns start eliding.
 
 Never trust `systemctl is-active` alone. `verify.sh` asks **KWin** where the
 `casedash` window is and asserts its geometry, its layer (0 = background), the
-process, and the freshness of `state.json`. A `casedash-verify.timer` runs it
-every 15 minutes.
+process, the freshness of `state.json`, **and the plausibility of its contents**.
+A `casedash-verify.timer` runs it every 15 minutes.
+
+The content check exists because freshness is not correctness. The panel once
+showed Argentina from a perfectly fresh `state.json` on a healthy unit. Set the
+expected weather location so the timer can catch that class of failure:
+
+```ini
+# systemd/casedash-verify.service -> [Service]
+Environment=CASEDASH_VERIFY_WX_LATLON=34.746,-92.289
+```
+
+Unset means the check is skipped, so a clone on someone else's machine does not
+fail verification for living somewhere else.
 
 ## Repo layout
 

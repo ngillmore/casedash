@@ -38,9 +38,17 @@ PUBLISH_EVERY = 3.0        # how often state.json is actually rewritten
 # (Wi-Fi, a bridge, a VPN tunnel are all plausible), so this is explicit and
 # overridable. Find yours with: ip route get 1.1.1.1
 NET_IFACE = os.environ.get("CASEDASH_NET_IFACE", "enp77s0")
-# wttr.in location slug. "auto" lets wttr.in geolocate from your public IP,
-# which is the right default for a stranger cloning this repo.
+# wttr.in location slug. Use a place name, NOT "auto": wttr.in has no "auto"
+# slug, so it silently falls back to IP geolocation, whose third-party database
+# has been observed mis-mapping consumer ISP ranges to the wrong continent.
+# A literal name is deterministic and needs no IP lookup. Examples:
+#   "Little+Rock,AR"   "London"   "48.85,2.35" (lat,lon also works)
 WX_LOCATION = os.environ.get("CASEDASH_WX_LOCATION", "auto")
+# When WX_LOCATION is "auto", the collector resolves it to literal coordinates
+# once at startup via wttr.in's own geolocation, then pins them for the process
+# lifetime. This keeps the zero-config story for a stranger cloning the repo
+# while removing the per-request IP lookup that produced the wrong continent.
+WX_RESOLVE_AUTO = WX_LOCATION.strip().lower() in ("", "auto")
 HISTORY_LEN = 160          # samples kept for the sparkline charts (~8 min at 3s)
 
 # The panel is a glanceable status display, not a monitor. Quantising the
@@ -393,29 +401,59 @@ class WeatherProbe:
     def __init__(self):
         self.cache: dict = {}
         self.at = 0.0
+        # Resolved once, reused forever. Starts as the configured slug; if that
+        # slug is "auto", the first successful fetch replaces it with the
+        # coordinates wttr.in reported, so every later request is a fixed point
+        # rather than another IP lookup that could land on another continent.
+        self.location = WX_LOCATION
+        self.pinned = not WX_RESOLVE_AUTO
+
+    def _fetch(self, loc: str) -> dict | None:
+        req = urllib.request.Request(
+            f"https://wttr.in/{loc}?format=j1",
+            headers={"User-Agent": "curl/8"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            j = json.loads(r.read().decode())
+        cur = j["current_condition"][0]
+        near = j.get("nearest_area", [{}])[0]
+        out = {
+            "temp_f": int(cur["temp_F"]),
+            "temp_c": int(cur["temp_C"]),
+            "feels_f": int(cur["FeelsLikeF"]),
+            "desc": cur["weatherDesc"][0]["value"],
+            "humidity": int(cur["humidity"]),
+            "wind_mph": int(cur["windspeedMiles"]),
+            "code": int(cur["weatherCode"]),
+            "area": near.get("areaName", [{}])[0].get("value", ""),
+            "region": near.get("region", [{}])[0].get("value", ""),
+            "country": near.get("country", [{}])[0].get("value", ""),
+        }
+        # Only carry coordinates when they parse -- a missing one must not
+        # silently become 0.0, which is a real place in the Atlantic.
+        try:
+            out["lat"] = round(float(near["latitude"]), 4)
+            out["lon"] = round(float(near["longitude"]), 4)
+        except (KeyError, IndexError, TypeError, ValueError):
+            pass
+        return out
 
     def read(self, now: float) -> dict:
         if now - self.at < TTL_WEATHER and self.cache:
             return self.cache
         try:
-            req = urllib.request.Request(
-                f"https://wttr.in/{WX_LOCATION}?format=j1",
-                headers={"User-Agent": "curl/8"},
-            )
-            with urllib.request.urlopen(req, timeout=10) as r:
-                j = json.loads(r.read().decode())
-            cur = j["current_condition"][0]
-            self.cache = {
-                "temp_f": int(cur["temp_F"]),
-                "temp_c": int(cur["temp_C"]),
-                "feels_f": int(cur["FeelsLikeF"]),
-                "desc": cur["weatherDesc"][0]["value"],
-                "humidity": int(cur["humidity"]),
-                "wind_mph": int(cur["windspeedMiles"]),
-                "code": int(cur["weatherCode"]),
-                "area": j.get("nearest_area", [{}])[0].get("areaName", [{}])[0].get("value", ""),
-            }
+            fresh = self._fetch(self.location)
+            if fresh is None:
+                raise ValueError("empty weather response")
+            # Pin coordinates on the first success while in auto mode, then
+            # never geolocate again for this process lifetime.
+            if not self.pinned and "lat" in fresh and "lon" in fresh:
+                self.location = f"{fresh['lat']},{fresh['lon']}"
+                self.pinned = True
+            self.cache = fresh
         except Exception:
+            # A failed refresh keeps the previous reading rather than blanking
+            # the panel; self.at still advances so we retry on the next TTL.
             pass
         self.at = now
         return self.cache
